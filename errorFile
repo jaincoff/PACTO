@@ -1,0 +1,13 @@
+
+> my-project@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.145:3000
+✓ Ready in 672ms
+
+ GET /admin/painel 200 in 1006ms (next.js: 343ms, application-code: 663ms)
+ GET /login 200 in 1230ms (next.js: 1178ms, application-code: 51ms)
+ GET /users/me 404 in 139ms (next.js: 39ms, application-code: 99ms)
+[?25h
