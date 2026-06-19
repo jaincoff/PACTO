@@ -998,6 +998,8 @@ export function persistAuthSession(
 ) {
   if (typeof window === "undefined") return;
 
+  clearAuthSession();
+
   localStorage.setItem("auth_token", payload.access_token);
   localStorage.setItem("auth_user", JSON.stringify(payload.user));
 

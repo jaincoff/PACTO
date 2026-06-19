@@ -749,7 +749,7 @@ function SupervisorDashboardContent() {
           </section>
 
           {/* Active Volunteers with Elders */}
-          {volunteersWithElders.length > 0 && (
+          {dashboard?.user?.status === "active" && volunteersWithElders.length > 0 && (
             <section>
               <div className="mb-4">
                 <h2 className="text-xl font-semibold text-foreground">

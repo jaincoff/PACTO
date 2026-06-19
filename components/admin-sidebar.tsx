@@ -28,13 +28,13 @@ export function AdminSidebar({ activeItem = "painel" }: AdminSidebarProps) {
   const navItems = [
     { id: "painel", label: "Painel", icon: LayoutDashboard, href: "/admin/painel" },
     { id: "utilizadores", label: "Utilizadores", icon: Users, href: "/admin/utilizadores" },
-    { id: "voluntarios", label: "Voluntarios", icon: Heart, href: "/admin/voluntarios" },
-    { id: "idosos", label: "Idosos", icon: Users, href: "/admin/idosos" },
-    { id: "supervisores", label: "Supervisores", icon: UserCog, href: "/admin/supervisores" },
-    { id: "avaliacoes", label: "Avaliacoes", icon: ClipboardList, href: "/admin/avaliacoes" },
+    //{ id: "voluntarios", label: "Voluntarios", icon: Heart, href: "/admin/voluntarios" },
+    //{ id: "idosos", label: "Idosos", icon: Users, href: "/admin/idosos" },
+    //{ id: "supervisores", label: "Supervisores", icon: UserCog, href: "/admin/supervisores" },
+    { id: "avaliacoes", label: "Gerir Avaliacoes", icon: ClipboardList, href: "/admin/avaliacoes" },
     { id: "exportacao", label: "Exportacao de Dados", icon: Download, href: "/admin/exportacao" },
-    { id: "auditoria", label: "Auditoria", icon: FileText, href: "/admin/auditoria" },
-    { id: "configuracoes", label: "Configuracoes", icon: Settings, href: "/admin/configuracoes" },
+    //{ id: "auditoria", label: "Auditoria", icon: FileText, href: "/admin/auditoria" },
+    //{ id: "configuracoes", label: "Configuracoes", icon: Settings, href: "/admin/configuracoes" },
   ];
 
   const handleLogout = () => {

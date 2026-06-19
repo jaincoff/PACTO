@@ -22,16 +22,22 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
   const { displayName, roleLabel, profile } = useCurrentUserProfile();
   const userStatus = profile?.status;
   const isActive = userStatus === "active";
-  const isUnderReview = userStatus === "pending_approval" || userStatus === "pending_admin_approval";
+  // const isUnderReview = userStatus === "pending_approval" || userStatus === "pending_admin_approval";
+  // const isUnderReview = false; // Temporarily set to false for testing purposes
 
   const allNavItems = [
-    { id: "painel", label: "Painel", icon: LayoutDashboard, href: "/voluntario/painel" },
+    {
+      id: "painel",
+      label: "Painel",
+      icon: LayoutDashboard,
+      href: "/voluntario/painel",
+    },
     {
       id: "avaliacoes",
       label: "Avaliacoes",
       icon: ClipboardList,
       href: "/voluntario/avaliacoes",
-      hideWhenUnderReview: true,
+      // hideWhenUnderReview: true,
     },
     {
       id: "adicionar",
@@ -51,8 +57,9 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
 
   const navItems = allNavItems.filter((item) => {
     if (item.requiresApproval && !isActive) return false;
-    if (item.hideWhenUnderReview && isUnderReview) return false;
-    if ((item as Record<string, unknown>).hideWhenActive && isActive) return false;
+    // if (item.hideWhenUnderReview && isUnderReview) return false;
+    if ((item as Record<string, unknown>).hideWhenActive && isActive)
+      return false;
     return true;
   });
 
@@ -82,7 +89,10 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
       </div>
 
       {/* Profile — clickable, goes to /perfil */}
-      <Link href="/voluntario/perfil" className="flex flex-col items-center px-6 pb-4 transition-opacity hover:opacity-90">
+      <Link
+        href="/voluntario/perfil"
+        className="flex flex-col items-center px-6 pb-4 transition-opacity hover:opacity-90"
+      >
         <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-primary/20">
           <Image
             src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"
@@ -91,7 +101,9 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
             className="object-cover"
           />
         </div>
-        <h2 className="mt-3 text-lg font-semibold text-foreground">{displayName}</h2>
+        <h2 className="mt-3 text-lg font-semibold text-foreground">
+          {displayName}
+        </h2>
         <span className="text-sm font-medium text-primary">{roleLabel}</span>
       </Link>
 

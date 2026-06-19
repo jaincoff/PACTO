@@ -38,7 +38,7 @@ import {
   type AdminAssessmentQuestion,
 } from "../../../lib/api";
 
-type Tab = "test-questions" | "assessment-questions";
+type Tab = "volunteer" | "elder" | "supervisor";
 
 const testCategoryMeta: Record<
   string,
@@ -109,7 +109,7 @@ const defaultMeta = {
 };
 
 export default function AdminAvaliacoesPage() {
-  const [tab, setTab] = useState<Tab>("test-questions");
+  const [tab, setTab] = useState<Tab>("volunteer");
   const [testQuestions, setTestQuestions] = useState<AdminTestQuestion[]>([]);
   const [assessQuestions, setAssessQuestions] = useState<
     AdminAssessmentQuestion[]
@@ -157,14 +157,17 @@ export default function AdminAvaliacoesPage() {
     loadData();
   }, []);
 
-  // ── Group questions by category ──
+  // ── Derive current data from tab ──
 
-  const groupedTest = groupBy(testQuestions, "category");
-  const groupedAssess = groupBy(assessQuestions, "category");
-
-  const currentGroups = tab === "test-questions" ? groupedTest : groupedAssess;
   const currentAll =
-    tab === "test-questions" ? testQuestions : assessQuestions;
+    tab === "elder"
+      ? assessQuestions
+      : testQuestions.filter((q) => q.role === tab);
+
+  const currentGroups = groupBy(currentAll, "category");
+
+  const currentMeta =
+    tab === "elder" ? assessCategoryMeta : testCategoryMeta;
 
   // ── Handlers ──
 
@@ -179,16 +182,16 @@ export default function AdminAvaliacoesPage() {
         opts = [{ text: "Sim", points: 10 }, { text: "Nao", points: 0 }];
       }
 
-      if (tab === "test-questions") {
-        await createTestQuestion(token, {
-          role: "volunteer",
+      if (tab === "elder") {
+        await createAssessmentQuestion(token, {
           question_text: newText,
           options: opts,
           order: currentAll.length + 1,
           category: newCategory || undefined,
         });
       } else {
-        await createAssessmentQuestion(token, {
+        await createTestQuestion(token, {
+          role: tab,
           question_text: newText,
           options: opts,
           order: currentAll.length + 1,
@@ -227,13 +230,13 @@ export default function AdminAvaliacoesPage() {
         opts = undefined;
       }
 
-      if (tab === "test-questions") {
-        await updateTestQuestion(token, id, {
+      if (tab === "elder") {
+        await updateAssessmentQuestion(token, id, {
           question_text: editText,
           options: opts,
         });
       } else {
-        await updateAssessmentQuestion(token, id, {
+        await updateTestQuestion(token, id, {
           question_text: editText,
           options: opts,
         });
@@ -257,10 +260,10 @@ export default function AdminAvaliacoesPage() {
     if (!token) return;
     setLoading(true);
     try {
-      if (tab === "test-questions") {
-        await deleteTestQuestion(token, id);
-      } else {
+      if (tab === "elder") {
         await deleteAssessmentQuestion(token, id);
+      } else {
+        await deleteTestQuestion(token, id);
       }
       setSuccessMsg("Questao eliminada.");
       setTimeout(() => setSuccessMsg(""), 3000);
@@ -308,8 +311,9 @@ export default function AdminAvaliacoesPage() {
           {/* Tabs */}
           <div className="flex gap-2 border-b border-border">
             {([
-              ["test-questions", "Testes de Competencias"],
-              ["assessment-questions", "Avaliacoes de Idosos"],
+              ["volunteer", "Competencias Voluntario"],
+              ["elder", "Avaliacoes de Idosos"],
+              ["supervisor", "Competencias Supervisor"],
             ] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -354,9 +358,21 @@ export default function AdminAvaliacoesPage() {
                     <Input
                       value={newCategory}
                       onChange={(e) => setNewCategory(e.target.value)}
-                      placeholder="Ex: loneliness, safety..."
+                      placeholder={
+                        tab === "elder"
+                          ? "Ex: loneliness, physical..."
+                          : tab === "supervisor"
+                            ? "supervisor"
+                            : "Ex: bem-estar-psicologico, capacidade-compassiva..."
+                      }
                       className="h-10 rounded-xl"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Funcao</Label>
+                    <div className="flex h-10 items-center rounded-xl border border-border bg-muted px-4 text-sm text-muted-foreground">
+                      {tab === "elder" ? "idoso" : tab}
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -405,13 +421,10 @@ export default function AdminAvaliacoesPage() {
           {/* Categories */}
           <div className="space-y-4">
             {Object.entries(currentGroups).map(([catKey, questions]) => {
-              const meta =
-                (tab === "test-questions"
-                  ? testCategoryMeta
-                  : assessCategoryMeta)[catKey] || {
-                  ...defaultMeta,
-                  label: catKey,
-                };
+              const meta = currentMeta[catKey] || {
+                ...defaultMeta,
+                label: catKey,
+              };
               const Icon = meta.icon;
               const isExpanded = expandedCat === catKey;
 

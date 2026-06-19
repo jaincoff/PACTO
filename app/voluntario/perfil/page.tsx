@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import {
   clearAuthSession,
+  type CurrentUserProfile,
   getCurrentUserProfile,
   getMyAssessmentResults,
   getStoredAuthToken,
@@ -47,7 +48,7 @@ export default function PerfilPage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  //const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -190,10 +191,7 @@ export default function PerfilPage() {
                   </div>
                 </div>
 
-                {/* Edit Button */}
-                <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  Editar Perfil
-                </Button>
+
               </div>
             </CardContent>
           </Card>
@@ -325,9 +323,6 @@ export default function PerfilPage() {
                 </div>
               </div>
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
-                <Button variant="outline" className="rounded-xl">
-                  Cancelar
-                </Button>
                 <Button className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
                   Guardar Alteracoes
                 </Button>
@@ -546,84 +541,6 @@ export default function PerfilPage() {
                   Alterar Palavra-passe
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Account */}
-          <Card className="border-border bg-card shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                <User className="h-5 w-5 text-primary" />
-                Conta
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button
-                variant="outline"
-                onClick={handleLogout}
-                className="flex items-center gap-2 rounded-xl"
-              >
-                <LogOut className="h-4 w-4" />
-                Terminar Sessao
-              </Button>
-
-              <div className="border-t border-border pt-4">
-                {!showDeleteConfirm ? (
-                  <div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="flex items-center gap-2 rounded-xl border-destructive text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Eliminar Conta
-                    </Button>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Esta acao nao pode ser revertida.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-                    <p className="mb-3 font-medium text-destructive">
-                      Tem a certeza que deseja eliminar a sua conta?
-                    </p>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      Todos os seus dados serao permanentemente removidos. Esta
-                      acao nao pode ser revertida.
-                    </p>
-                    <div className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="rounded-xl"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button variant="destructive" className="rounded-xl">
-                        Confirmar Eliminacao
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Help */}
-          <Card className="border-border bg-card shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                <HelpCircle className="h-5 w-5 text-primary" />
-                Precisa de ajuda?
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-muted-foreground">
-                A nossa equipa esta sempre disponivel para apoiar.
-              </p>
-              <Button variant="outline" className="rounded-xl">
-                Contactar Apoio
-              </Button>
             </CardContent>
           </Card>
 

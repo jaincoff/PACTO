@@ -1424,29 +1424,9 @@ function PainelContent() {
               {error}
             </div>
           )}
-          {!loading && dash && (
-            <section className="rounded-2xl border border-border bg-card p-6">
-              <div className="mb-3 text-sm text-muted-foreground">
-                Sessao: {dash.user.email} ({dash.user.role})
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(dash.stats).map(([k, v]) => (
-                  <div
-                    key={k}
-                    className="rounded-xl border border-border bg-background p-3"
-                  >
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {k.replaceAll("_", " ")}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold">{String(v)}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
           <WelcomeSection />
-          <ApprovalCard />
-          <QuickActions />
+          {dash?.user?.status === "pending_test" && <ApprovalCard />}
+          {dash?.user?.status === "active" && <QuickActions />}
           <HelpSection />
         </div>
       </main>
