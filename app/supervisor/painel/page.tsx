@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import Link from "next/link";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   Users,
   Heart,
@@ -45,6 +45,7 @@ import {
   listAllElders,
   listAllVolunteers,
   getElderDetail,
+  getElderPhotoUrl,
   getElderAssessmentResults,
   changeUserStatus,
   type SupervisorDashboardResponse,
@@ -65,8 +66,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const defaultAvatar =
-  "https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=200&h=200&fit=crop&crop=face";
+const defaultAvatar = null;
 
 const statusConfig: Record<
   string,
@@ -380,7 +380,7 @@ function SupervisorDashboardContent() {
             const sl: Record<string,string> = { in_progress: "Em progresso", completed: "Concluido" };
             return (<Card key={e.id} className="border-border bg-card shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push(`/supervisor/painel?action=elderProfile&elderId=${e.id}`)}><CardContent className="flex flex-col items-center p-6 text-center">
               <div className={`absolute right-4 top-4 h-3 w-3 rounded-full ${sc[e.status]||"bg-gray-500"}`}/>
-              <div className="relative mb-4 h-24 w-24 overflow-hidden rounded-full border-4 border-primary/10"><Image src="https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=200&h=200&fit=crop&crop=face" alt="" fill className="object-cover"/></div>
+              <UserAvatar photo={getElderPhotoUrl(e.id, e.photo)} name={e.name} gender={undefined} size={96} className="mb-4 shadow-md" />
               <h3 className="text-lg font-semibold">{e.name}</h3><span className="text-sm text-muted-foreground">{e.age ? `${e.age} anos` : ""}</span>
               <div className={`mt-4 rounded-full px-3 py-1 text-xs font-medium ${sb[e.status]||"bg-gray-50"}`}><span className={`inline-block h-1.5 w-1.5 rounded-full ${sc[e.status]||"bg-gray-500"} mr-1.5`}/>{sl[e.status]||e.status}</div>
               {e.total_score != null && <p className="mt-2 text-xs text-muted-foreground">Pontuacao: {e.total_score}</p>}
@@ -398,7 +398,7 @@ function SupervisorDashboardContent() {
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => router.push("/supervisor/painel?action=idosos")}><ArrowLeft className="h-4 w-4"/>Voltar a Idosos</Button>
           {elderProfileLoading ? <p className="text-muted-foreground">A carregar...</p> : elderProfile ? <>
             <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-6 sm:flex-row sm:items-start">
-              <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-4 border-primary/20 shadow-lg"><Image src={defaultAvatar} alt="" fill className="object-cover"/></div>
+              <UserAvatar photo={getElderPhotoUrl(elProfId, elderProfile.photo)} name={elderProfile.name} gender={undefined} size={112} className="shrink-0 shadow-lg" />
               <div className="flex-1 text-center sm:text-left">
                 <h1 className="text-2xl font-bold">{elderProfile.name}</h1>
                 <p className="text-sm text-muted-foreground">{elderProfile.age || "—"} anos</p>

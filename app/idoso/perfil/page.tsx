@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { AdminSidebar } from "@/components/admin-sidebar";
-import { AdminMobileHeader } from "@/components/admin-mobile-header";
+import { ElderSidebar } from "@/components/elder-sidebar";
+import { ElderMobileHeader } from "@/components/elder-mobile-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
   Phone,
   Calendar,
   Users,
+  LogOut,
   Lock,
   Eye,
   EyeOff,
@@ -31,19 +32,15 @@ import {
   deleteProfilePhoto,
 } from "../../../lib/api";
 
-export default function AdminPerfilPage() {
+export default function PerfilPage() {
   const router = useRouter();
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  //const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     nomeCompleto: "",
@@ -85,6 +82,66 @@ export default function AdminPerfilPage() {
     loadProfile();
   }, []);
 
+  const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSave = async () => {
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setSaving(true);
+    try {
+      const updated = await updateMyProfile(token, {
+        name: formData.nomeCompleto,
+        email: formData.email,
+        phone: formData.telemovel || undefined,
+        birth_year: formData.anoNascimento ? parseInt(formData.anoNascimento) : undefined,
+        gender: formData.sexo !== "Prefiro nao dizer" ? formData.sexo : undefined,
+      });
+      setProfile(updated);
+      setSaveMsg("Perfil atualizado.");
+      setTimeout(() => setSaveMsg(""), 3000);
+    } catch (err) {
+      setSaveMsg(
+        err instanceof Error ? err.message : "Erro ao atualizar perfil.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setPhotoUploading(true);
+    try {
+      const result = await uploadProfilePhoto(token, file);
+      setProfile((prev) => prev ? { ...prev, photo: result.photo } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handlePhotoDelete = async () => {
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setPhotoUploading(true);
+    try {
+      await deleteProfilePhoto(token);
+      setProfile((prev) => prev ? { ...prev, photo: null } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   const roleLabel = useMemo(() => {
     switch (profile?.role) {
       case "admin":
@@ -99,81 +156,19 @@ export default function AdminPerfilPage() {
     }
   }, [profile]);
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError("");
-    setSuccess("");
-    const token = getStoredAuthToken();
-    if (!token) return;
-    setPhotoUploading(true);
-    try {
-      const result = await uploadProfilePhoto(token, file);
-      setProfile((prev) => prev ? { ...prev, photo: result.photo } : prev);
-      setSuccess("Foto atualizada com sucesso.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar foto.");
-    } finally {
-      setPhotoUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const handlePhotoDelete = async () => {
-    setError("");
-    setSuccess("");
-    const token = getStoredAuthToken();
-    if (!token) return;
-    setPhotoUploading(true);
-    try {
-      await deleteProfilePhoto(token);
-      setProfile((prev) => prev ? { ...prev, photo: null } : prev);
-      setSuccess("Foto eliminada com sucesso.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao eliminar foto.");
-    } finally {
-      setPhotoUploading(false);
-    }
-  };
-
   const handleLogout = () => {
     clearAuthSession();
     router.push("/login");
   };
 
-  const handleSaveProfile = async () => {
-    setError("");
-    setSuccess("");
-    const token = getStoredAuthToken();
-    if (!token) return;
-
-    setSaving(true);
-    try {
-      const updated = await updateMyProfile(token, {
-        name: formData.nomeCompleto,
-        email: formData.email,
-        phone: formData.telemovel || undefined,
-        birth_year: formData.anoNascimento ? parseInt(formData.anoNascimento) : undefined,
-        gender: formData.sexo !== "Prefiro nao dizer" ? formData.sexo : undefined,
-      });
-      setProfile(updated);
-      setSuccess("Perfil atualizado com sucesso.");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Falha ao guardar alteracoes.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="flex min-h-screen">
-      <AdminMobileHeader />
-      <AdminSidebar activeItem="perfil" />
+      <ElderMobileHeader />
+      <ElderSidebar activeItem="perfil" />
 
       <main className="flex-1 overflow-y-auto pt-16 lg:pt-0">
         <div className="mx-auto max-w-4xl space-y-6 p-4 lg:p-8">
+          {/* Page Header */}
           <div className="mb-2">
             <h1 className="text-2xl font-bold tracking-tight text-foreground lg:text-3xl">
               Meu Perfil
@@ -197,7 +192,7 @@ export default function AdminPerfilPage() {
                   />
                   <UserAvatar
                     photo={profile?.photo}
-                    name={formData.nomeCompleto || "Administrador"}
+                    name={formData.nomeCompleto || "Idoso"}
                     gender={formData.sexo}
                     size={112}
                   />
@@ -223,10 +218,11 @@ export default function AdminPerfilPage() {
                   </div>
                 </div>
 
+                {/* Profile Info */}
                 <div className="flex flex-1 flex-col items-center gap-4 sm:items-start">
                   <div className="text-center sm:text-left">
                     <h2 className="text-xl font-bold text-foreground lg:text-2xl">
-                      {formData.nomeCompleto || "Administrador PACTO"}
+                      {formData.nomeCompleto || "Utilizador PACTO"}
                     </h2>
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
                       <User className="h-3.5 w-3.5" />
@@ -245,8 +241,15 @@ export default function AdminPerfilPage() {
                     {!loading && error ? (
                       <p className="mt-2 text-xs text-destructive">{error}</p>
                     ) : null}
+                    {saveMsg ? (
+                      <p className={`mt-2 text-xs ${saveMsg.includes("Erro") ? "text-destructive" : "text-green-600"}`}>
+                        {saveMsg}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
+
+
               </div>
             </CardContent>
           </Card>
@@ -260,11 +263,6 @@ export default function AdminPerfilPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-              {success ? (
-                <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                  {success}
-                </div>
-              ) : null}
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label
@@ -384,7 +382,7 @@ export default function AdminPerfilPage() {
               </div>
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
                 <Button
-                  onClick={handleSaveProfile}
+                  onClick={handleSave}
                   disabled={saving}
                   className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
                 >
@@ -506,13 +504,13 @@ export default function AdminPerfilPage() {
                   Obrigado por fazer parte do PACTO
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  A sua dedicacao ajuda a criar uma comunidade mais humana,
-                  inclusiva e solidaria.
+                  A sua participacao e essencial para construirmos uma comunidade mais atenta e solidaria.
                 </p>
               </div>
             </CardContent>
           </Card>
 
+          {/* Spacer for mobile */}
           <div className="h-4" />
         </div>
       </main>

@@ -17,7 +17,7 @@ import {
   HelpCircle,
   User,
 } from "lucide-react";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 import {
   getMyElderProfile,
@@ -105,19 +105,20 @@ export default function ElderDashboardPage() {
     {
       name: "João Silva",
       role: "Voluntário",
-      avatar:
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face",
+      gender: "masculino",
+      avatar: null,
     },
     {
       name: "Equipa PACTO",
       role: "Apoio",
+      gender: null,
       avatar: null,
     },
     {
       name: "Maria Costa",
       role: "Familiar Responsável",
-      avatar:
-        "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face",
+      gender: "feminino",
+      avatar: null,
     },
   ];
 
@@ -200,14 +201,13 @@ export default function ElderDashboardPage() {
             <Card className="border-border bg-card shadow-sm">
               <CardContent className="p-6 lg:p-8">
                 <div className="flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left">
-                  <div className="relative mb-4 h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-primary/20 sm:mb-0 sm:mr-6">
-                    <Image
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"
-                      alt="João Silva"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
+                  <UserAvatar
+                    photo={null}
+                    name="João Silva"
+                    gender="masculino"
+                    size={96}
+                    className="mb-4 shrink-0 sm:mb-0 sm:mr-6"
+                  />
                   <div className="flex-1">
                     <h3 className="text-2xl font-semibold text-foreground">
                       João Silva
@@ -339,20 +339,12 @@ export default function ElderDashboardPage() {
               {contacts.map((contact, index) => (
                 <Card key={index} className="border-border bg-card shadow-sm">
                   <CardContent className="flex flex-col items-center p-6 text-center">
-                    {contact.avatar ? (
-                      <div className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-primary/20">
-                        <Image
-                          src={contact.avatar}
-                          alt={contact.name}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                        <Heart className="h-8 w-8 text-primary" />
-                      </div>
-                    )}
+                    <UserAvatar
+                      photo={null}
+                      name={contact.name}
+                      gender={contact.gender}
+                      size={64}
+                    />
                     <h3 className="mt-4 font-semibold text-foreground">
                       {contact.name}
                     </h3>

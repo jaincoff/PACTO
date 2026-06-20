@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { SupervisorSidebar } from "@/components/supervisor-sidebar";
 import { SupervisorMobileHeader } from "@/components/supervisor-mobile-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Heart,
@@ -15,15 +14,17 @@ import {
   Mail,
   LogOut,
   Lock,
-  Eye,
-  EyeOff,
+  Camera,
 } from "lucide-react";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   clearAuthSession,
   getCurrentUserProfile,
   getMyAssessmentResults,
   getStoredAuthToken,
   updateMyProfile,
+  uploadProfilePhoto,
+  deleteProfilePhoto,
   type AssessmentResultsResponse,
   type CurrentUserProfile,
 } from "../../../lib/api";
@@ -44,6 +45,8 @@ export default function SupervisorPerfilPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveMsg, setSaveMsg] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -93,6 +96,37 @@ export default function SupervisorPerfilPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setPhotoUploading(true);
+    try {
+      const result = await uploadProfilePhoto(token, file);
+      setProfile((prev) => prev ? { ...prev, photo: result.photo } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handlePhotoDelete = async () => {
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setPhotoUploading(true);
+    try {
+      await deleteProfilePhoto(token);
+      setProfile((prev) => prev ? { ...prev, photo: null } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
@@ -156,13 +190,40 @@ export default function SupervisorPerfilPage() {
           {/* Profile Summary */}
           <Card className="border-border bg-card shadow-sm">
             <CardContent className="flex items-center gap-6 p-6">
-              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-4 border-primary/20">
-                <Image
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face"
-                  alt="Foto de perfil"
-                  fill
-                  className="object-cover"
+              <div className="relative">
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={handlePhotoUpload}
+                  className="hidden"
                 />
+                <UserAvatar
+                  photo={profile?.photo}
+                  name={profile?.name || "Supervisor"}
+                  gender={profile?.gender}
+                  size={80}
+                />
+                <div className="absolute -bottom-1 -right-1 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={photoUploading}
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105 disabled:opacity-50"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                  </button>
+                  {profile?.photo && (
+                    <button
+                      type="button"
+                      onClick={handlePhotoDelete}
+                      disabled={photoUploading}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition-transform hover:scale-105 disabled:opacity-50"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <h2 className="text-xl font-bold text-foreground">

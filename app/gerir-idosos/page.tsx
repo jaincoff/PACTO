@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Search, UserPlus, ChevronDown, Heart, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import { Sidebar } from "@/components/sidebar";
 import { MobileHeader } from "@/components/mobile-header";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   getStoredAuthToken,
   getStoredAuthUser,
+  getElderPhotoUrl,
   listMyElders,
   type ElderListItem,
 } from "../../lib/api";
@@ -195,8 +196,6 @@ export default function GerirIdososPage() {
             {filteredElderly.map((person) => {
               const status =
                 statusConfig[person.status] || statusConfig.in_progress;
-              const avatar =
-                "https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=200&h=200&fit=crop&crop=face";
               return (
                 <Link
                   key={person.id}
@@ -212,14 +211,13 @@ export default function GerirIdososPage() {
                       />
 
                       {/* Avatar */}
-                      <div className="relative mb-4 h-24 w-24 overflow-hidden rounded-full border-4 border-primary/10 shadow-md transition-all duration-200 group-hover:border-primary/20 group-hover:shadow-lg">
-                        <Image
-                          src={avatar}
-                          alt={`Foto de ${person.name}`}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
+                      <UserAvatar
+                        photo={getElderPhotoUrl(person.id, person.photo)}
+                        name={person.name}
+                        gender={undefined}
+                        size={96}
+                        className="mb-4 shadow-md transition-all duration-200 group-hover:border-primary/20 group-hover:shadow-lg"
+                      />
 
                       {/* Name */}
                       <h3 className="mb-2 text-lg font-semibold text-foreground">

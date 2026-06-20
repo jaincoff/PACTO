@@ -8,7 +8,7 @@ import {
   FileText,
   LogOut,
 } from "lucide-react";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clearAuthSession } from "@/lib/api";
@@ -50,9 +50,13 @@ export function SupervisorSidebar({ activeItem = "painel" }: SupervisorSidebarPr
       </div>
 
       <Link href="/supervisor/perfil" className="flex flex-col items-center px-6 pb-4 transition-opacity hover:opacity-90">
-        <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-primary/20">
-          <Image src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop&crop=face" alt={`Foto de ${displayName}`} fill className="object-cover" />
-        </div>
+        <UserAvatar
+          photo={profile?.photo}
+          name={displayName}
+          gender={profile?.gender}
+          size={96}
+          className="border-4 border-primary/20"
+        />
         <h2 className="mt-3 text-lg font-semibold text-foreground">{displayName}</h2>
         <span className="text-sm font-medium text-primary">{roleLabel}</span>
       </Link>

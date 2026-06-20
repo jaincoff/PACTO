@@ -306,7 +306,7 @@ export default function LoginPage() {
               </div>
 
               {/* Social Login */}
-              <div className="space-y-3">
+              {/* <div className="space-y-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -346,7 +346,7 @@ export default function LoginPage() {
                   </svg>
                   Continuar com Microsoft
                 </Button>
-              </div>
+              </div> */}
 
               {/* Create Account Link */}
               <p className="mt-6 text-center text-sm text-muted-foreground">

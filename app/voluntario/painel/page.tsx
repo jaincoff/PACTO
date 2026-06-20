@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { MobileHeader } from "@/components/mobile-header";
@@ -42,6 +42,7 @@ import {
   listAvailableElders,
   getElderAssessmentResults,
   getElderDetail,
+  getElderPhotoUrl,
   type ElderAssessmentResultsResponse,
   type ElderListItem,
   type ElderDetail,
@@ -730,14 +731,7 @@ function PainelContent() {
                           className={`absolute right-4 top-4 h-3 w-3 rounded-full ${sc}`}
                           title={sl}
                         />
-                        <div className="relative mb-4 h-24 w-24 overflow-hidden rounded-full border-4 border-primary/10 shadow-md">
-                          <Image
-                            src="https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=200&h=200&fit=crop&crop=face"
-                            alt=""
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
+                        <UserAvatar photo={getElderPhotoUrl(p.id, p.photo)} name={p.name} gender={undefined} size={96} className="mb-4 shadow-md" />
                         <h3 className="mb-2 text-lg font-semibold">{p.name}</h3>
                         <span className="text-sm text-muted-foreground">
                           {p.age ? `${p.age} anos` : ""}
@@ -807,14 +801,7 @@ function PainelContent() {
               <>
                 {/* Profile Header */}
                 <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-6 sm:flex-row sm:items-start">
-                  <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-4 border-primary/20 shadow-lg">
-                    <Image
-                      src="https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=200&h=200&fit=crop&crop=face"
-                      alt=""
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
+                  <UserAvatar photo={getElderPhotoUrl(elderId, elderProfile.photo)} name={elderProfile.name} gender={undefined} size={112} className="shrink-0 shadow-lg" />
                   <div className="flex-1 text-center sm:text-left">
                     <h1 className="text-2xl font-bold">{elderProfile.name}</h1>
                     <p className="text-sm text-muted-foreground">

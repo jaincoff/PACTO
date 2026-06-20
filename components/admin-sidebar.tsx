@@ -11,11 +11,11 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clearAuthSession } from "@/lib/api";
 import { useCurrentUserProfile } from "@/hooks/use-current-user-profile";
+import { UserAvatar } from "@/components/user-avatar";
 
 interface AdminSidebarProps {
   activeItem?: string;
@@ -23,7 +23,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ activeItem = "painel" }: AdminSidebarProps) {
   const router = useRouter();
-  const { displayName, roleLabel } = useCurrentUserProfile();
+  const { profile, displayName, roleLabel } = useCurrentUserProfile();
 
   const navItems = [
     {
@@ -84,14 +84,13 @@ export function AdminSidebar({ activeItem = "painel" }: AdminSidebarProps) {
         href="/admin/perfil"
         className="flex flex-col items-center px-6 pb-4 transition-opacity hover:opacity-90"
       >
-        <div className="relative h-20 w-20 overflow-hidden rounded-full border-4 border-primary/20">
-          <Image
-            src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face"
-            alt={`Foto de ${displayName}`}
-            fill
-            className="object-cover"
-          />
-        </div>
+        <UserAvatar
+          photo={profile?.photo}
+          name={displayName}
+          gender={profile?.gender}
+          size={80}
+          className="border-4 border-primary/20"
+        />
         <h2 className="mt-2 text-base font-semibold text-foreground">
           {displayName}
         </h2>

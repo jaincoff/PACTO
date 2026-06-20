@@ -11,7 +11,7 @@ import {
   LogOut,
   User,
 } from "lucide-react";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -98,14 +98,13 @@ export function MobileHeader() {
         <div className="absolute inset-x-0 top-full border-b border-border bg-card shadow-lg">
           {/* Profile */}
           <div className="flex items-center gap-3 border-b border-border p-4">
-            <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-primary/20">
-              <Image
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"
-                alt={`Foto de perfil de ${displayName}`}
-                fill
-                className="object-cover"
-              />
-            </div>
+            <UserAvatar
+              photo={profile?.photo}
+              name={displayName}
+              gender={profile?.gender}
+              size={48}
+              className="border-2 border-primary/20"
+            />
             <div>
               <p className="text-sm font-semibold text-foreground">
                 {displayName}

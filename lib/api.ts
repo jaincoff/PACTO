@@ -118,6 +118,7 @@ export interface ElderListItem {
   status: string;
   total_score: number | null;
   wellbeing_summary: string | null;
+  photo: string | null;
   created_at: string;
 }
 
@@ -140,6 +141,7 @@ export interface ElderDetail {
   status: string;
   total_score: number | null;
   wellbeing_summary: string | null;
+  photo: string | null;
   answers: ElderAnswerDetail[];
   created_at: string;
   updated_at: string;
@@ -175,6 +177,7 @@ export interface CurrentUserProfile {
   birth_year: number | null;
   phone: string | null;
   gender: string | null;
+  photo: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1150,6 +1153,38 @@ export async function resetPasswordRequest(
   return data;
 }
 
+// ── Profile Photo ───────────────────────────────────────────────────
+
+export function getProfilePhotoUrl(photo: string | null | undefined): string | null {
+  if (!photo) return null;
+  if (photo.startsWith("http")) return photo;
+  return `${getApiBaseUrl()}/users/me/photo/file/${photo}`;
+}
+
+export async function uploadProfilePhoto(
+  token: string,
+  file: File,
+): Promise<{ photo: string; message: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${getApiBaseUrl()}/users/me/photo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function deleteProfilePhoto(
+  token: string,
+): Promise<{ message: string }> {
+  const response = await fetch(`${getApiBaseUrl()}/users/me/photo`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return parseJsonOrThrow(response);
+}
+
 export function clearAuthSession() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("auth_token");
@@ -1171,4 +1206,38 @@ export function getDashboardRouteForRole(role: string) {
     default:
       return "/voluntario/painel";
   }
+}
+
+// ── Elder Photo ─────────────────────────────────────────────────────
+
+export function getElderPhotoUrl(elderId: string, photo: string | null | undefined): string | null {
+  if (!photo) return null;
+  if (photo.startsWith("http")) return photo;
+  return `${getApiBaseUrl()}/elders/${elderId}/photo/file/${photo}`;
+}
+
+export async function uploadElderPhoto(
+  token: string,
+  elderId: string,
+  file: File,
+): Promise<{ photo: string; message: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${getApiBaseUrl()}/elders/${elderId}/photo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function deleteElderPhoto(
+  token: string,
+  elderId: string,
+): Promise<{ message: string }> {
+  const response = await fetch(`${getApiBaseUrl()}/elders/${elderId}/photo`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return parseJsonOrThrow(response);
 }

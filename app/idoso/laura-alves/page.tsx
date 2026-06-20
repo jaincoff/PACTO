@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ArrowLeft, Phone, MapPin, Heart, Calendar, Clock, MessageCircle, AlertTriangle, User, FileText, Plus, Brain, Home, Smile, Leaf, Clipboard } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
+import { UserAvatar } from "@/components/user-avatar"
 import { Sidebar } from "@/components/sidebar"
 import { MobileHeader } from "@/components/mobile-header"
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,7 @@ const lauraData = {
   age: 78,
   birthYear: 1948,
   status: "attention",
-  avatar: "https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?w=400&h=400&fit=crop&crop=face",
+  avatar: null,
   phone: "+351 912 345 678",
   address: "Rua das Oliveiras, 45, 3000-200 Coimbra",
   civilStatus: "Viúva",
@@ -132,14 +132,13 @@ export default function LauraAlvesProfilePage() {
               <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-start">
                 {/* Avatar */}
                 <div className="relative">
-                  <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-white shadow-lg lg:h-40 lg:w-40">
-                    <Image
-                      src={lauraData.avatar}
-                      alt={`Foto de ${lauraData.name}`}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
+                  <UserAvatar
+                    photo={null}
+                    name={lauraData.name}
+                    gender={lauraData.gender}
+                    size={160}
+                    className="shadow-lg"
+                  />
                   <div
                     className={`absolute bottom-2 right-2 h-5 w-5 rounded-full border-3 border-white ${status.color}`}
                     title={status.label}

@@ -16,7 +16,7 @@ import {
   User,
   Shield,
 } from "lucide-react";
-import Image from "next/image";
+import { UserAvatar } from "@/components/user-avatar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ export function AdminMobileHeader() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { displayName } = useCurrentUserProfile();
+  const { displayName, profile } = useCurrentUserProfile();
 
   const navItems = [
     {
@@ -119,14 +119,13 @@ export function AdminMobileHeader() {
           <span className="font-bold text-foreground">PACTO</span>
         </div>
 
-        <div className="relative h-9 w-9 overflow-hidden rounded-full border-2 border-primary/20">
-          <Image
-            src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face"
-            alt={displayName}
-            fill
-            className="object-cover"
-          />
-        </div>
+        <UserAvatar
+          photo={profile?.photo}
+          name={displayName}
+          gender={profile?.gender}
+          size={36}
+          className="border-2 border-primary/20"
+        />
       </header>
 
       {/* Mobile Menu Overlay */}
@@ -170,14 +169,13 @@ export function AdminMobileHeader() {
 
               {/* Profile */}
               <div className="flex flex-col items-center border-b border-border px-4 py-6">
-                <div className="relative h-16 w-16 overflow-hidden rounded-full border-4 border-primary/20">
-                  <Image
-                    src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face"
-                    alt={displayName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
+                <UserAvatar
+                  photo={profile?.photo}
+                  name={displayName}
+                  gender={profile?.gender}
+                  size={64}
+                  className="border-4 border-primary/20"
+                />
                 <h2 className="mt-3 text-lg font-semibold text-foreground">
                   {displayName}
                 </h2>

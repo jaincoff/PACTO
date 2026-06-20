@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { MobileHeader } from "@/components/mobile-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Camera,
@@ -18,19 +17,20 @@ import {
   Calendar,
   Users,
   LogOut,
-  Trash2,
-  HelpCircle,
   Lock,
   Eye,
   EyeOff,
 } from "lucide-react";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   clearAuthSession,
   type CurrentUserProfile,
   getCurrentUserProfile,
   getMyAssessmentResults,
   getStoredAuthToken,
-  type AssessmentCategoryResult,
+  updateMyProfile,
+  uploadProfilePhoto,
+  deleteProfilePhoto,
   type AssessmentResultsResponse,
 } from "../../../lib/api";
 import {
@@ -95,6 +95,10 @@ export default function PerfilPage() {
 
   const [assessmentResults, setAssessmentResults] =
     useState<AssessmentResultsResponse | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadResults() {
@@ -109,6 +113,61 @@ export default function PerfilPage() {
     }
     loadResults();
   }, []);
+
+  const handleSave = async () => {
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setSaving(true);
+    try {
+      const updated = await updateMyProfile(token, {
+        name: formData.nomeCompleto,
+        email: formData.email,
+        phone: formData.telemovel || undefined,
+        birth_year: formData.anoNascimento ? parseInt(formData.anoNascimento) : undefined,
+        gender: formData.sexo !== "Prefiro nao dizer" ? formData.sexo : undefined,
+      });
+      setProfile(updated);
+      setSaveMsg("Perfil atualizado.");
+      setTimeout(() => setSaveMsg(""), 3000);
+    } catch (err) {
+      setSaveMsg(
+        err instanceof Error ? err.message : "Erro ao atualizar perfil.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setPhotoUploading(true);
+    try {
+      const result = await uploadProfilePhoto(token, file);
+      setProfile((prev) => prev ? { ...prev, photo: result.photo } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handlePhotoDelete = async () => {
+    const token = getStoredAuthToken();
+    if (!token) return;
+    setPhotoUploading(true);
+    try {
+      await deleteProfilePhoto(token);
+      setProfile((prev) => prev ? { ...prev, photo: null } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   const roleLabel = useMemo(() => {
     switch (profile?.role) {
@@ -150,19 +209,40 @@ export default function PerfilPage() {
           <Card className="border-border bg-card shadow-sm">
             <CardContent className="p-6 lg:p-8">
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-                {/* Avatar with Edit Icon */}
                 <div className="relative">
-                  <div className="relative h-28 w-28 overflow-hidden rounded-full border-4 border-primary/20">
-                    <Image
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"
-                      alt={`Foto de perfil de ${formData.nomeCompleto || "utilizador"}`}
-                      fill
-                      className="object-cover"
-                    />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                  <UserAvatar
+                    photo={profile?.photo}
+                    name={formData.nomeCompleto || "Voluntario"}
+                    gender={formData.sexo}
+                    size={112}
+                  />
+                  <div className="absolute -bottom-1 -right-1 flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={photoUploading}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105 disabled:opacity-50"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                    {profile?.photo && (
+                      <button
+                        type="button"
+                        onClick={handlePhotoDelete}
+                        disabled={photoUploading}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition-transform hover:scale-105 disabled:opacity-50"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    )}
                   </div>
-                  <button className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform hover:scale-105">
-                    <Camera className="h-4 w-4" />
-                  </button>
                 </div>
 
                 {/* Profile Info */}
@@ -187,6 +267,11 @@ export default function PerfilPage() {
                     ) : null}
                     {!loading && error ? (
                       <p className="mt-2 text-xs text-destructive">{error}</p>
+                    ) : null}
+                    {saveMsg ? (
+                      <p className={`mt-2 text-xs ${saveMsg.includes("Erro") ? "text-destructive" : "text-green-600"}`}>
+                        {saveMsg}
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -323,8 +408,12 @@ export default function PerfilPage() {
                 </div>
               </div>
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
-                <Button className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90">
-                  Guardar Alteracoes
+                <Button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {saving ? "A guardar..." : "Guardar Alteracoes"}
                 </Button>
               </div>
             </CardContent>
