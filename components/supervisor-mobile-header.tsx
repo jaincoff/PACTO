@@ -19,12 +19,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { clearAuthSession } from "@/lib/api";
 import { useCurrentUserProfile } from "@/hooks/use-current-user-profile";
+// import { profile } from "console";
 
 export function SupervisorMobileHeader() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { displayName, roleLabel } = useCurrentUserProfile();
+  const { displayName, roleLabel, profile } = useCurrentUserProfile();
+  const userStatus = profile?.status;
 
   const navItems = [
     {
@@ -38,8 +40,14 @@ export function SupervisorMobileHeader() {
       label: "Voluntários",
       icon: Users,
       href: "/supervisor/voluntarios",
+      requiresActive: true
     },
-    { id: "idosos", label: "Idosos", icon: Heart, href: "/supervisor/idosos" },
+    { id: "idosos",
+      label: "Idosos",
+      icon: Heart,
+      href: "/supervisor/idosos",
+      requiresActive: true
+    },
     {
       id: "avaliacoes",
       label: "Avaliações",
@@ -51,6 +59,7 @@ export function SupervisorMobileHeader() {
       label: "Relatórios",
       icon: FileText,
       href: "/supervisor/relatorios",
+      requiresActive: true
     },
   ];
 
@@ -130,16 +139,24 @@ export function SupervisorMobileHeader() {
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
+                  const blocked = (item as Record<string, unknown>).requiresActive && userStatus !== "active";
                   return (
                     <li key={item.id}>
                       <Link
-                        href={item.href}
+                        href={blocked ? "#" : item.href}
+                        onClick={
+                        blocked
+                          ? (e) => e.preventDefault()
+                          : () => setIsOpen(false)
+                      }
                         className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors ${
-                          isActive
+                          blocked
+                            ? "cursor-not-allowed text-muted-foreground/50"
+                            : isActive
                             ? "bg-primary text-primary-foreground"
                             : "text-foreground hover:bg-secondary"
                         }`}
-                        onClick={() => setIsOpen(false)}
+                        // onClick={() => setIsOpen(false)}
                       >
                         <Icon className="h-5 w-5" />
                         {item.label}

@@ -17,37 +17,59 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { clearAuthSession } from "@/lib/api";
 import { useCurrentUserProfile } from "@/hooks/use-current-user-profile";
+import { useRouter } from "next/navigation";
 
 export function MobileHeader() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { displayName, roleLabel } = useCurrentUserProfile();
+  const { displayName, roleLabel, profile } = useCurrentUserProfile();
+  const userStatus = profile?.status;
+  const isActive = userStatus === "active";
 
-  const handleLogout = () => {
-    clearAuthSession();
-  };
+  // const handleLogout = () => {
+  //   clearAuthSession();
+  // };
 
-  const navItems = [
-    { id: "painel", label: "Painel", icon: LayoutDashboard, href: "/painel" },
+  const allNavItems = [
+    {
+      id: "painel",
+      label: "Painel",
+      icon: LayoutDashboard,
+      href: "/voluntario/painel",
+    },
     {
       id: "avaliacoes",
       label: "Avaliacoes",
       icon: ClipboardList,
-      href: "/avaliacoes",
+      href: "/voluntario/avaliacoes",
     },
     {
       id: "adicionar",
       label: "Adicionar Idoso",
       icon: UserPlus,
-      href: "/adicionar-idoso",
+      href: "/voluntario/painel?action=adicionar",
+      requiresApproval: true,
     },
     {
       id: "gerir",
       label: "Gestao de Idosos",
       icon: Users,
-      href: "/gerir-idosos",
+      href: "/voluntario/painel?action=gerir",
+      requiresApproval: true,
     },
   ];
+
+  const navItems = allNavItems.filter((item) => {
+    if ((item as Record<string, unknown>).hideWhenActive && isActive)
+      return false;
+    return true;
+  });
+
+  const handleLogout = () => {
+    clearAuthSession();
+    router.push("/login");
+  };
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
@@ -97,17 +119,24 @@ export function MobileHeader() {
             <ul className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isCurrentRoute = pathname === item.href;
+                const blocked = "requiresApproval" in item && !isActive;
                 return (
                   <li key={item.id}>
                     <Link
-                      href={item.href}
+                      href={blocked ? "#" : item.href}
+                      onClick={
+                        blocked
+                          ? (e) => e.preventDefault()
+                          : () => setIsOpen(false)
+                      }
                       className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors ${
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-foreground hover:bg-secondary"
+                        blocked
+                          ? "cursor-not-allowed text-muted-foreground/50"
+                          : isCurrentRoute
+                            ? "bg-primary text-primary-foreground"
+                            : "text-foreground hover:bg-secondary"
                       }`}
-                      onClick={() => setIsOpen(false)}
                     >
                       <Icon className="h-5 w-5" />
                       {item.label}
@@ -121,7 +150,7 @@ export function MobileHeader() {
           {/* Bottom Actions */}
           <div className="border-t border-border p-2">
             <Link
-              href="/perfil"
+              href="/voluntario/perfil"
               className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               onClick={() => setIsOpen(false)}
             >

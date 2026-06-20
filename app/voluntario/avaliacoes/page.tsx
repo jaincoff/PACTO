@@ -656,7 +656,7 @@ export default function AvaliacoesPage() {
               )}
 
               {/* Progress */}
-              <div>
+              <div className="sticky top-16 z-30 -mx-4 -mt-4 bg-background/95 px-4 pt-4 pb-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:top-0">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">
                     {answeredCount} de {totalInCategory} respondidas

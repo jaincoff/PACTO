@@ -8,6 +8,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+
+  allowedDevOrigins: ['192.168.1.145'],
+  
   async rewrites() {
     let backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     // Ensure the URL has a protocol (Next.js requires http:// or https://)

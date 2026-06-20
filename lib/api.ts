@@ -1035,6 +1035,99 @@ export function getStoredAuthUser(): LoginResponse["user"] | null {
   }
 }
 
+// ── Forgot / Reset Password ────────────────────────────────────────
+
+export interface ForgotPasswordRequest {
+  email?: string;
+  phone?: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+  via: "email" | "phone";
+  masked_contact: string;
+}
+
+export interface VerifyResetCodeRequest {
+  email?: string;
+  phone?: string;
+  code: string;
+}
+
+export interface VerifyResetCodeResponse {
+  reset_token: string;
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  reset_token: string;
+  new_password: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
+export async function forgotPasswordRequest(
+  payload: ForgotPasswordRequest,
+): Promise<ForgotPasswordResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.detail === "string"
+        ? data.detail
+        : "Erro ao solicitar redefinicao da palavra-passe.",
+    );
+  }
+  return data;
+}
+
+export async function verifyResetCodeRequest(
+  payload: VerifyResetCodeRequest,
+): Promise<VerifyResetCodeResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/verify-reset-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.detail === "string"
+        ? data.detail
+        : "Codigo invalido ou expirado.",
+    );
+  }
+  return data;
+}
+
+export async function resetPasswordRequest(
+  payload: ResetPasswordRequest,
+): Promise<ResetPasswordResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.detail === "string"
+        ? data.detail
+        : "Erro ao redefinir a palavra-passe.",
+    );
+  }
+  return data;
+}
+
 export function clearAuthSession() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("auth_token");

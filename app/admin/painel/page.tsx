@@ -69,9 +69,9 @@ export default function AdminDashboardPage() {
 function AdminDashboardContent() {
   const [dashboard, setDashboard] = useState<DashboardOverview | null>(null);
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
-  const [pendingSupervisors, setPendingSupervisors] = useState<
-    PendingVolunteer[]
-  >([]);
+  // const [pendingSupervisors, setPendingSupervisors] = useState<
+  //   PendingVolunteer[]
+  // >([]);
   const [expandedSupervisor, setExpandedSupervisor] = useState<string | null>(
     null,
   );
@@ -127,7 +127,7 @@ function AdminDashboardContent() {
         ]);
         setDashboard(overview);
         setUsers(userList);
-        setPendingSupervisors(supervisors);
+        // setPendingSupervisors(supervisors);
       } catch (err) {
         setError(
           err instanceof Error

@@ -56,8 +56,6 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
   ];
 
   const navItems = allNavItems.filter((item) => {
-    if (item.requiresApproval && !isActive) return false;
-    // if (item.hideWhenUnderReview && isUnderReview) return false;
     if ((item as Record<string, unknown>).hideWhenActive && isActive)
       return false;
     return true;
@@ -69,7 +67,7 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
   };
 
   return (
-    <aside className="hidden h-screen w-72 flex-col border-r border-border bg-card lg:flex">
+    <aside className="hidden sticky top-0 h-screen w-72 flex-col border-r border-border bg-card lg:flex">
       {/* Logo */}
       <div className="flex items-center gap-3 p-6">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary overflow-hidden">
@@ -113,14 +111,18 @@ export function Sidebar({ activeItem = "painel" }: SidebarProps) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeItem === item.id;
+            const blocked = item.requiresApproval && !isActive;
             return (
               <li key={item.id}>
                 <Link
-                  href={item.href}
+                  href={blocked ? "#" : item.href}
+                  onClick={blocked ? (e) => e.preventDefault() : undefined}
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-secondary"
+                    blocked
+                      ? "cursor-not-allowed text-muted-foreground/50"
+                      : active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-secondary"
                   }`}
                 >
                   <Icon className="h-5 w-5" />

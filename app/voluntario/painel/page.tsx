@@ -457,8 +457,8 @@ function PainelContent() {
     return (
       <div className="flex min-h-screen">
         <MobileHeader />
-        <Sidebar activeItem="" />
         <main className="flex-1 overflow-y-auto pt-16 lg:pt-0">
+          <Sidebar activeItem="painel" />
           <div className="mx-auto max-w-3xl space-y-6 p-4 lg:p-8">
             <Button
               variant="ghost"

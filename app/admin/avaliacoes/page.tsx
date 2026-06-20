@@ -481,13 +481,57 @@ export default function AdminAvaliacoesPage() {
                                   }
                                   className="h-10 rounded-xl"
                                 />
-                                <Input
-                                  value={editOptions}
-                                  onChange={(e) =>
-                                    setEditOptions(e.target.value)
+                                {(() => {
+                                  let opts: Array<{
+                                    text: string;
+                                    points: number;
+                                  }> = [];
+                                  try {
+                                    opts = JSON.parse(editOptions);
+                                  } catch {
+                                    opts = [];
                                   }
-                                  className="h-10 rounded-xl font-mono text-xs"
-                                />
+                                  return opts.map((opt, i) => (
+                                    <div
+                                      key={i}
+                                      className="flex gap-2"
+                                    >
+                                      <Input
+                                        value={opt.text}
+                                        onChange={(e) => {
+                                          const updated = [...opts];
+                                          updated[i] = {
+                                            ...updated[i],
+                                            text: e.target.value,
+                                          };
+                                          setEditOptions(
+                                            JSON.stringify(updated),
+                                          );
+                                        }}
+                                        placeholder="Texto da opcao"
+                                        className="h-10 flex-1 rounded-xl"
+                                      />
+                                      <Input
+                                        type="number"
+                                        value={String(opt.points)}
+                                        onChange={(e) => {
+                                          const updated = [...opts];
+                                          updated[i] = {
+                                            ...updated[i],
+                                            points: Number(
+                                              e.target.value,
+                                            ),
+                                          };
+                                          setEditOptions(
+                                            JSON.stringify(updated),
+                                          );
+                                        }}
+                                        placeholder="Pontos"
+                                        className="h-10 w-24 rounded-xl"
+                                      />
+                                    </div>
+                                  ));
+                                })()}
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
