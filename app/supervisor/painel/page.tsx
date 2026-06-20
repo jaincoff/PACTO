@@ -39,19 +39,19 @@ import {
   getStoredAuthToken,
   getSupervisorDashboard,
   listPendingVolunteers,
-  getVolunteerTestDetail,
   approveVolunteer,
   listVolunteersWithElders,
   getVolunteerAssessmentResults,
-  listAvailableElders,
+  listAllElders,
+  listAllVolunteers,
   getElderDetail,
   getElderAssessmentResults,
   changeUserStatus,
   type SupervisorDashboardResponse,
   type PendingVolunteer,
-  type VolunteerTestDetail,
   type VolunteerWithElders,
   type AssessmentResultsResponse,
+  type AdminUserListItem,
   type ElderListItem,
   type ElderDetail,
   type ElderAssessmentResultsResponse,
@@ -108,9 +108,6 @@ function SupervisorDashboardContent() {
   const [expandedVolunteer, setExpandedVolunteer] = useState<string | null>(
     null,
   );
-  const [testDetail, setTestDetail] = useState<VolunteerTestDetail | null>(
-    null,
-  );
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -128,7 +125,7 @@ function SupervisorDashboardContent() {
   const [eldersLoading, setEldersLoading] = useState(false);
   const [elderSearch, setElderSearch] = useState("");
   const [elderStatusFilter, setElderStatusFilter] = useState("");
-  const [volunteerList, setVolunteerList] = useState<VolunteerWithElders[]>([]);
+  const [volunteerList, setVolunteerList] = useState<AdminUserListItem[]>([]);
   const [volListLoading, setVolListLoading] = useState(false);
   const [volSearch, setVolSearch] = useState("");
 
@@ -150,11 +147,11 @@ function SupervisorDashboardContent() {
   useEffect(() => {
     if (action === "idosos" && token) {
       setEldersLoading(true);
-      listAvailableElders(token).then(setAllElders).catch(() => {}).finally(() => setEldersLoading(false));
+      listAllElders(token).then(setAllElders).catch(() => {}).finally(() => setEldersLoading(false));
     }
     if (action === "voluntarios" && token) {
       setVolListLoading(true);
-      listVolunteersWithElders(token).then(d => setVolunteerList(d.volunteers)).catch(() => {}).finally(() => setVolListLoading(false));
+      listAllVolunteers(token).then(setVolunteerList as any).catch(() => {}).finally(() => setVolListLoading(false));
     }
   }, [action, token]);
 
@@ -193,7 +190,7 @@ function SupervisorDashboardContent() {
   const handleExpandVolunteer = async (volunteer: PendingVolunteer) => {
     if (expandedVolunteer === volunteer.id) {
       setExpandedVolunteer(null);
-      setTestDetail(null);
+      setVolunteerResults(null);
       return;
     }
 
@@ -203,10 +200,10 @@ function SupervisorDashboardContent() {
 
     setLoadingDetail(true);
     try {
-      const detail = await getVolunteerTestDetail(token, volunteer.id);
-      setTestDetail(detail);
+      const results = await getVolunteerAssessmentResults(token, volunteer.id);
+      setVolunteerResults(results);
     } catch {
-      setTestDetail(null);
+      setVolunteerResults(null);
     } finally {
       setLoadingDetail(false);
     }
@@ -241,7 +238,7 @@ function SupervisorDashboardContent() {
       await approveVolunteer(token, userId);
       setPendingVolunteers((prev) => prev.filter((v) => v.id !== userId));
       setExpandedVolunteer(null);
-      setTestDetail(null);
+      setVolunteerResults(null);
       if (dashboard) {
         setDashboard({
           ...dashboard,
@@ -272,7 +269,7 @@ function SupervisorDashboardContent() {
       await changeUserStatus(token, userId, "inactive");
       setPendingVolunteers((prev) => prev.filter((v) => v.id !== userId));
       setExpandedVolunteer(null);
-      setTestDetail(null);
+      setVolunteerResults(null);
       if (dashboard) {
         setDashboard({
           ...dashboard,
@@ -449,18 +446,36 @@ function SupervisorDashboardContent() {
       <div className="flex min-h-screen"><SupervisorMobileHeader /><SupervisorSidebar activeItem="voluntarios" />
         <main className="flex-1 overflow-y-auto pt-16 lg:pt-0"><div className="mx-auto max-w-6xl space-y-6 p-4 lg:p-8">
           <div className="flex items-center gap-3"><Button variant="ghost" size="sm" onClick={() => router.push("/supervisor/painel")}><ArrowLeft className="h-4 w-4"/>Voltar</Button></div>
-          <div><h1 className="text-3xl font-bold">Voluntarios</h1><p className="mt-2 text-muted-foreground">Todos os voluntarios ativos e os seus idosos atribuidos.</p></div>
+          <div><h1 className="text-3xl font-bold">Voluntarios</h1><p className="mt-2 text-muted-foreground">Todos os voluntarios registados na plataforma.</p></div>
           <div className="relative"><Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"/><input type="text" placeholder="Pesquisar..." value={volSearch} onChange={e => setVolSearch(e.target.value)} className="h-12 w-full rounded-xl border border-input bg-background pl-12 pr-4 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"/></div>
           {volListLoading ? <p className="text-sm text-muted-foreground">A carregar...</p> : filteredVols.length === 0 ? <Card><CardContent className="flex flex-col items-center gap-3 p-12 text-center"><Users className="h-10 w-10 text-muted-foreground"/><p className="font-medium">Nenhum voluntario encontrado</p></CardContent></Card> :
-          <div className="space-y-4">{filteredVols.map(v => (
+          <div className="space-y-4">{filteredVols.map(v => {
+            const statusStyles: Record<string, string> = {
+              active: "bg-green-100 text-green-700",
+              pending_approval: "bg-amber-100 text-amber-700",
+              pending_admin_approval: "bg-amber-100 text-amber-700",
+              pending_test: "bg-blue-100 text-blue-700",
+              inactive: "bg-red-100 text-red-700",
+            };
+            const statusLabels: Record<string, string> = {
+              active: "Ativo",
+              pending_approval: "Pendente",
+              pending_admin_approval: "Pendente",
+              pending_test: "Teste pendente",
+              inactive: "Inativo",
+            };
+            return (
             <Card key={v.id} className="border-border bg-card shadow-sm"><CardContent className="p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100"><Users className="h-5 w-5 text-blue-600"/></div><div><h3 className="font-semibold">{v.name}</h3><p className="text-sm text-muted-foreground">{v.email}</p></div></div>
-                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">{v.elders_count} idoso(s)</span>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[v.status] || "bg-gray-100 text-gray-700"}`}>{statusLabels[v.status] || v.status}</span>
+                  {v.test_score != null && <span className="text-xs text-muted-foreground">Teste: {v.test_score}%{v.test_passed ? " ✅" : " ❌"}</span>}
+                </div>
               </div>
-              {v.elders.length > 0 && <div className="mt-3 border-t border-border pt-3"><p className="mb-2 text-xs font-medium text-muted-foreground">Idosos atribuidos:</p><div className="flex flex-wrap gap-2">{v.elders.map(e => (<span key={e.id} className="rounded-full bg-secondary px-2.5 py-1 text-xs">{e.name}{e.age ? ` (${e.age}a)` : ""}</span>))}</div></div>}
             </CardContent></Card>
-          ))}</div>}
+            );
+          })}</div>}
         </div></main></div>
     );
   }
@@ -665,77 +680,115 @@ function SupervisorDashboardContent() {
                           </div>
                         </div>
 
-                        {/* Expanded test detail */}
+                        {/* Expanded assessment results */}
                         {isExpanded && (
                           <div className="mt-4 border-t border-border pt-4">
                             {loadingDetail ? (
                               <p className="text-sm text-muted-foreground">
-                                A carregar respostas...
+                                A carregar resultados...
                               </p>
-                            ) : testDetail ? (
-                              <div className="space-y-3">
-                                {/* Score header */}
-                                <div className="flex flex-wrap items-center gap-3 rounded-lg bg-secondary/50 px-4 py-3">
-                                  <span className="text-sm font-medium">
-                                    Pontuacao: {testDetail.score} /{" "}
-                                    {testDetail.max_score} (
-                                    {testDetail.max_score > 0
-                                      ? Math.round(
-                                          (testDetail.score /
-                                            testDetail.max_score) *
-                                            100,
-                                        )
-                                      : 0}
-                                    %)
-                                  </span>
-                                  <span className="text-sm text-muted-foreground">
-                                    Minimo: {testDetail.passing_score}%
-                                  </span>
-                                  {testDetail.passed ? (
-                                    <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                                      Aprovado
-                                    </span>
-                                  ) : (
-                                    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
-                                      Reprovado
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Per-question answers */}
-                                {testDetail.answers.map((answer) => (
-                                  <div
-                                    key={answer.question_id}
-                                    className="rounded-lg border border-border p-3"
-                                  >
-                                    <p className="mb-2 text-sm font-medium text-foreground">
-                                      {answer.question_text}
-                                    </p>
-                                    {answer.chosen_option_index >= 0 ? (
-                                      <div className="flex items-center justify-between text-sm">
-                                        <span>
-                                          <span className="text-muted-foreground">
-                                            Resposta:{" "}
-                                          </span>
-                                          <span className="font-medium text-foreground">
-                                            {answer.chosen_text}
-                                          </span>
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                          {answer.points}/{answer.max_points} pts
+                            ) : volunteerResults?.results ? (
+                              <div className="space-y-6">
+                                {Object.entries(
+                                  volunteerResults.results,
+                                ).map(([key, result]) => {
+                                  const levelColor =
+                                    result.level === "elevado" ||
+                                    result.level === "elevada" ||
+                                    result.level === "elevadas"
+                                      ? "text-green-700 bg-green-100"
+                                      : result.level === "moderado" ||
+                                          result.level === "moderada" ||
+                                          result.level === "moderadas"
+                                        ? "text-amber-700 bg-amber-100"
+                                        : "text-red-700 bg-red-100";
+                                  return (
+                                    <div key={key} className="space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <h3 className="font-semibold text-foreground">
+                                          {result.label || key}
+                                        </h3>
+                                        <span
+                                          className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${levelColor}`}
+                                        >
+                                          {result.level}
                                         </span>
                                       </div>
-                                    ) : (
-                                      <span className="text-sm text-red-500">
-                                        Sem resposta
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
+
+                                      <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-sm">
+                                          <span className="text-muted-foreground">
+                                            Pontuacao
+                                          </span>
+                                          <span className="font-medium text-foreground">
+                                            {result.score}/{result.max} ({result.percentage}
+                                            %)
+                                          </span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                                          <div
+                                            className={`h-full rounded-full transition-all ${
+                                              result.percentage >= 75
+                                                ? "bg-green-500"
+                                                : result.percentage >= 50
+                                                  ? "bg-amber-500"
+                                                  : "bg-red-500"
+                                            }`}
+                                            style={{ width: `${result.percentage}%` }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <p className="text-sm leading-relaxed text-muted-foreground">
+                                        {result.interpretation}
+                                      </p>
+
+                                      {result.dimensions &&
+                                        Object.keys(result.dimensions).length > 0 && (
+                                          <div className="rounded-xl border border-border bg-secondary/20 p-3">
+                                            <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                              Dimensoes
+                                            </p>
+                                            <ResponsiveContainer width="100%" height={220}>
+                                              <RadarChart
+                                                data={Object.entries(result.dimensions).map(
+                                                  ([dk, dv]) => ({
+                                                    dimension: dv.label || dk,
+                                                    value: dv.average,
+                                                    fullMark: 5,
+                                                  }),
+                                                )}
+                                              >
+                                                <PolarGrid stroke="#e5e7eb" />
+                                                <PolarAngleAxis
+                                                  dataKey="dimension"
+                                                  tick={{
+                                                    fontSize: 10,
+                                                    fill: "#6b7280",
+                                                  }}
+                                                />
+                                                <PolarRadiusAxis
+                                                  domain={[0, 5]}
+                                                  tick={{ fontSize: 9, fill: "#9ca3af" }}
+                                                />
+                                                <Radar
+                                                  name="Pontuacao"
+                                                  dataKey="value"
+                                                  stroke="#e6842d"
+                                                  fill="#e6842d"
+                                                  fillOpacity={0.3}
+                                                />
+                                              </RadarChart>
+                                            </ResponsiveContainer>
+                                          </div>
+                                        )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : (
-                              <p className="text-sm text-destructive">
-                                Falha ao carregar detalhes do teste.
+                              <p className="text-sm text-muted-foreground">
+                                Nenhum resultado disponivel.
                               </p>
                             )}
                           </div>
@@ -827,7 +880,7 @@ function SupervisorDashboardContent() {
                                 A carregar resultados...
                               </p>
                             ) : volunteerResults?.results ? (
-                              <div className="space-y-4">
+                              <div className="space-y-6">
                                 {Object.entries(
                                   volunteerResults.results,
                                 ).map(([key, result]) => {
@@ -842,59 +895,81 @@ function SupervisorDashboardContent() {
                                         ? "text-amber-700 bg-amber-100"
                                         : "text-red-700 bg-red-100";
                                   return (
-                                    <div key={key}>
-                                      <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-sm font-medium">
-                                          {result.label}
+                                    <div key={key} className="space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <h3 className="font-semibold text-foreground">
+                                          {result.label || key}
+                                        </h3>
+                                        <span
+                                          className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${levelColor}`}
+                                        >
+                                          {result.level}
                                         </span>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-sm">
-                                            {result.score}/{result.max}
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-sm">
+                                          <span className="text-muted-foreground">
+                                            Pontuacao
                                           </span>
-                                          <span
-                                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${levelColor}`}
-                                          >
-                                            {result.level}
+                                          <span className="font-medium text-foreground">
+                                            {result.score}/{result.max} ({result.percentage}
+                                            %)
                                           </span>
                                         </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                                          <div
+                                            className={`h-full rounded-full transition-all ${
+                                              result.percentage >= 75
+                                                ? "bg-green-500"
+                                                : result.percentage >= 50
+                                                  ? "bg-amber-500"
+                                                  : "bg-red-500"
+                                            }`}
+                                            style={{ width: `${result.percentage}%` }}
+                                          />
+                                        </div>
                                       </div>
+
+                                      <p className="text-sm leading-relaxed text-muted-foreground">
+                                        {result.interpretation}
+                                      </p>
+
+                                      {/* Radar chart for dimensions */}
                                       {result.dimensions &&
-                                        Object.keys(result.dimensions)
-                                          .length > 0 && (
-                                          <div className="rounded-lg bg-secondary/20 p-2">
-                                            <ResponsiveContainer
-                                              width="100%"
-                                              height={160}
-                                            >
+                                        Object.keys(result.dimensions).length > 0 && (
+                                          <div className="rounded-xl border border-border bg-secondary/20 p-3">
+                                            <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                              Dimensoes
+                                            </p>
+                                            <ResponsiveContainer width="100%" height={220}>
                                               <RadarChart
-                                                data={Object.entries(
-                                                  result.dimensions,
-                                                ).map(([dk, dv]) => ({
-                                                  dimension: dv.label || dk,
-                                                  value: dv.average,
-                                                  fullMark: 5,
-                                                }))}
+                                                data={Object.entries(result.dimensions).map(
+                                                  ([dk, dv]) => ({
+                                                    dimension: dv.label || dk,
+                                                    value: dv.average,
+                                                    fullMark: 5,
+                                                  }),
+                                                )}
                                               >
                                                 <PolarGrid stroke="#e5e7eb" />
                                                 <PolarAngleAxis
                                                   dataKey="dimension"
                                                   tick={{
-                                                    fontSize: 9,
+                                                    fontSize: 10,
                                                     fill: "#6b7280",
                                                   }}
                                                 />
                                                 <PolarRadiusAxis
                                                   domain={[0, 5]}
-                                                  tick={{
-                                                    fontSize: 8,
-                                                    fill: "#9ca3af",
-                                                  }}
+                                                  tick={{ fontSize: 9, fill: "#9ca3af" }}
                                                 />
                                                 <Radar
+                                                  name="Pontuacao"
                                                   dataKey="value"
-                                                  stroke="#3b82f6"
-                                                  fill="#3b82f6"
-                                                  fillOpacity={0.2}
+                                                  stroke="#e6842d"
+                                                  fill="#e6842d"
+                                                  fillOpacity={0.3}
                                                 />
                                               </RadarChart>
                                             </ResponsiveContainer>

@@ -745,6 +745,28 @@ export async function listAvailableElders(
   return parseJsonOrThrow(response);
 }
 
+export async function listAllElders(
+  token: string,
+): Promise<ElderListItem[]> {
+  const response = await fetch(`${getApiBaseUrl()}/elders/all`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function listAllVolunteers(
+  token: string,
+): Promise<AdminUserListItem[]> {
+  const response = await fetch(`${getApiBaseUrl()}/users/volunteers/list`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return parseJsonOrThrow(response);
+}
+
 // ── Elder Assessment ────────────────────────────────────────────────
 
 export interface ElderAssessmentResultsResponse {
