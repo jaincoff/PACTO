@@ -1263,7 +1263,7 @@ export interface CaseUpdateRequest {
 // ── Admin/Supervisor Case Endpoints ──────────────────────────────────
 
 export async function listCases(token: string): Promise<ElderCaseOut[]> {
-  const response = await fetch(`/api/v1/admin/cases`, {
+  const response = await fetch(`${getApiBaseUrl()}/admin/cases`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -1276,7 +1276,7 @@ export async function createCase(
   token: string,
   data: CaseCreateRequest,
 ): Promise<ElderCaseOut> {
-  const response = await fetch(`/api/v1/admin/cases`, {
+  const response = await fetch(`${getApiBaseUrl()}/admin/cases`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1291,7 +1291,7 @@ export async function getCaseDetail(
   token: string,
   caseId: string,
 ): Promise<ElderCaseDetail> {
-  const response = await fetch(`/api/v1/admin/cases/${caseId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/admin/cases/${caseId}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -1304,7 +1304,7 @@ export async function updateCase(
   caseId: string,
   data: CaseUpdateRequest,
 ): Promise<ElderCaseOut> {
-  const response = await fetch(`/api/v1/admin/cases/${caseId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/admin/cases/${caseId}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -1319,7 +1319,7 @@ export async function deleteCase(
   token: string,
   caseId: string,
 ): Promise<{ case_id: string; message: string }> {
-  const response = await fetch(`/api/v1/admin/cases/${caseId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/admin/cases/${caseId}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -1329,7 +1329,7 @@ export async function deleteCase(
 // ── Volunteer Case Endpoints ─────────────────────────────────────────
 
 export async function listMyCases(token: string): Promise<ElderCaseOut[]> {
-  const response = await fetch(`/api/v1/elders/cases`, {
+  const response = await fetch(`${getApiBaseUrl()}/elders/cases`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -1341,7 +1341,7 @@ export async function getMyCaseDetail(
   token: string,
   caseId: string,
 ): Promise<ElderCaseDetail> {
-  const response = await fetch(`/api/v1/elders/cases/${caseId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/elders/cases/${caseId}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
