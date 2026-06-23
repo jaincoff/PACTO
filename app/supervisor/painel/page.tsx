@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { SupervisorSidebar } from "@/components/supervisor-sidebar";
 import { SupervisorMobileHeader } from "@/components/supervisor-mobile-header";
+import { CaseManagementSection } from "@/components/case-management-section"
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -993,6 +994,8 @@ function SupervisorDashboardContent() {
               </div>
             </section>
           )}
+
+          <CaseManagementSection limit={5} viewAllHref="/supervisor/casos" />
 
           {/* Bottom Message */}
           <Card className="border-border bg-gradient-to-r from-primary/5 to-transparent shadow-sm">

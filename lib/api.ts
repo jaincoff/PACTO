@@ -119,6 +119,7 @@ export interface ElderListItem {
   total_score: number | null;
   wellbeing_summary: string | null;
   photo: string | null;
+  in_case: boolean;
   created_at: string;
 }
 
@@ -248,7 +249,11 @@ function getApiBaseUrl() {
   }
   // When shared via ngrok (no custom API URL set), use relative path
   // so requests go to the same origin the frontend is served from.
-  if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:8000/api/v1";
+    }
     return "/api/v1";
   }
   return "http://localhost:8000/api/v1";
@@ -750,8 +755,10 @@ export async function listAvailableElders(
 
 export async function listAllElders(
   token: string,
+  withoutCase?: boolean,
 ): Promise<ElderListItem[]> {
-  const response = await fetch(`${getApiBaseUrl()}/elders/all`, {
+  const params = withoutCase ? "?without_case=true" : "";
+  const response = await fetch(`${getApiBaseUrl()}/elders/all${params}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
@@ -1185,6 +1192,163 @@ export async function deleteProfilePhoto(
   return parseJsonOrThrow(response);
 }
 
+// ── Elder Cases (Volunteer Assignments) ──────────────────────────────
+
+export interface AssessmentProgressInfo {
+  status: string;
+  total_questions: number;
+  answered_questions: number;
+  total_score: number | null;
+  wellbeing_summary: string | null;
+  results: Record<string, {
+    score: number;
+    max: number;
+    percentage: number;
+    label: string;
+    level: string;
+    interpretation: string;
+  }> | null;
+}
+
+export interface CaseVolunteerInfo {
+  id: string;
+  name: string;
+  email: string;
+  status: string | null;
+}
+
+export interface ElderCaseOut {
+  id: string;
+  case_name: string;
+  elder_id: string;
+  elder_name: string;
+  volunteer1_id: string;
+  volunteer1_name: string;
+  volunteer2_id: string | null;
+  volunteer2_name: string | null;
+  supervisor_id: string;
+  supervisor_name: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  assessment_progress: AssessmentProgressInfo | null;
+}
+
+export interface ElderCaseDetail {
+  id: string;
+  case_name: string;
+  status: string;
+  elder: ElderDetail | null;
+  volunteer1: CaseVolunteerInfo | null;
+  volunteer2: CaseVolunteerInfo | null;
+  supervisor: CaseVolunteerInfo | null;
+  created_at: string;
+  updated_at: string;
+  assessment_progress: AssessmentProgressInfo | null;
+}
+
+export interface CaseCreateRequest {
+  case_name: string;
+  elder_id: string;
+  volunteer1_id: string;
+  volunteer2_id?: string | null;
+}
+
+export interface CaseUpdateRequest {
+  case_name?: string;
+  volunteer1_id?: string;
+  volunteer2_id?: string | null;
+}
+
+// ── Admin/Supervisor Case Endpoints ──────────────────────────────────
+
+export async function listCases(token: string): Promise<ElderCaseOut[]> {
+  const response = await fetch(`/api/v1/admin/cases`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  console.log("------- >listCases response:", response);
+  return parseJsonOrThrow(response);
+}
+
+export async function createCase(
+  token: string,
+  data: CaseCreateRequest,
+): Promise<ElderCaseOut> {
+  const response = await fetch(`/api/v1/admin/cases`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function getCaseDetail(
+  token: string,
+  caseId: string,
+): Promise<ElderCaseDetail> {
+  const response = await fetch(`/api/v1/admin/cases/${caseId}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function updateCase(
+  token: string,
+  caseId: string,
+  data: CaseUpdateRequest,
+): Promise<ElderCaseOut> {
+  const response = await fetch(`/api/v1/admin/cases/${caseId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function deleteCase(
+  token: string,
+  caseId: string,
+): Promise<{ case_id: string; message: string }> {
+  const response = await fetch(`/api/v1/admin/cases/${caseId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return parseJsonOrThrow(response);
+}
+
+// ── Volunteer Case Endpoints ─────────────────────────────────────────
+
+export async function listMyCases(token: string): Promise<ElderCaseOut[]> {
+  const response = await fetch(`/api/v1/elders/cases`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return parseJsonOrThrow(response);
+}
+
+export async function getMyCaseDetail(
+  token: string,
+  caseId: string,
+): Promise<ElderCaseDetail> {
+  const response = await fetch(`/api/v1/elders/cases/${caseId}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  return parseJsonOrThrow(response);
+}
+
 export function clearAuthSession() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("auth_token");
@@ -1238,6 +1402,62 @@ export async function deleteElderPhoto(
   const response = await fetch(`${getApiBaseUrl()}/elders/${elderId}/photo`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
+  });
+  return parseJsonOrThrow(response);
+}
+
+// ── User Detail by ID ──────────────────────────────────────────────────
+
+export interface UserDetailResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  phone: string | null;
+  birth_year: number | null;
+  gender: string | null;
+  photo: string | null;
+  created_at: string;
+  updated_at: string;
+  test_attempts: Array<{
+    id: string;
+    test_role: string;
+    score: number;
+    passed: boolean;
+    created_at: string;
+  }>;
+}
+
+export async function getUserById(
+  token: string,
+  userId: string,
+): Promise<UserDetailResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/users/${userId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+  return parseJsonOrThrow(response);
+}
+
+export interface BasicUserInfo {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+}
+
+export async function getUserBasicInfo(
+  token: string,
+  userId: string,
+): Promise<BasicUserInfo> {
+  const response = await fetch(`${getApiBaseUrl()}/users/${userId}/basic`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
   return parseJsonOrThrow(response);
 }

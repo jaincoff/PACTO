@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { AdminMobileHeader } from "@/components/admin-mobile-header";
+import { CaseManagementSection } from "@/components/case-management-section"
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -684,6 +685,8 @@ function AdminDashboardContent() {
               </CardContent>
             </Card>
           </section>
+
+          <CaseManagementSection limit={5} viewAllHref="/admin/casos" />
 
           {/* Data Export */}
           <section className="space-y-4">

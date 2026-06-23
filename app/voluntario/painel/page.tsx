@@ -9,6 +9,14 @@ import { MobileHeader } from "@/components/mobile-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { WelcomeSection } from "@/components/welcome-section";
@@ -33,16 +41,19 @@ import {
   Smile,
   Leaf,
   CheckCircle2,
+  Users,
+  Loader2,
 } from "lucide-react";
 import {
   getDashboardOverview,
   getStoredAuthToken,
   createElder,
   listMyElders,
-  listAvailableElders,
   getElderAssessmentResults,
   getElderDetail,
   getElderPhotoUrl,
+  listMyCases,
+  getUserBasicInfo,
   type ElderAssessmentResultsResponse,
   type ElderListItem,
   type ElderDetail,
@@ -121,11 +132,9 @@ function PainelContent() {
   const [fb, setFb] = useState("");
   const [eldOk, setEldOk] = useState(false);
 
-  // Elder list
+  // Elder list (from cases)
   const [elders, setElders] = useState<ElderListItem[]>([]);
   const [eldLoad, setEldLoad] = useState(true);
-  const [availElders, setAvailElders] = useState<ElderListItem[]>([]);
-  const [eldTab, setEldTab] = useState<"mine" | "available">("mine");
   const [sq, setSq] = useState("");
   const [sf, setSf] = useState("");
   useEffect(() => {
@@ -134,9 +143,6 @@ function PainelContent() {
         .then(setElders)
         .catch(() => {})
         .finally(() => setEldLoad(false));
-      listAvailableElders(token)
-        .then(setAvailElders)
-        .catch(() => {});
     }
   }, [action, token]);
 
@@ -146,9 +152,18 @@ function PainelContent() {
   const [eldResults, setEldResults] =
     useState<ElderAssessmentResultsResponse | null>(null);
   const [activeTab, setActiveTab] = useState<"info" | "avaliacoes">("info");
+  const [casePeers, setCasePeers] = useState<{
+    volunteer1: { id: string; name: string } | null;
+    volunteer2: { id: string; name: string } | null;
+    supervisor: { id: string; name: string } | null;
+  } | null>(null);
+  const [peerDetail, setPeerDetail] = useState<{ name: string; email: string; phone: string | null } | null>(null);
+  const [peerDetailLoading, setPeerDetailLoading] = useState(false);
+
   useEffect(() => {
     if (action === "perfil" && elderId && token) {
       setEldProfLoad(true);
+      setCasePeers(null);
       getElderDetail(token, elderId)
         .then((ed) => {
           setElderProfile(ed);
@@ -157,14 +172,24 @@ function PainelContent() {
             for (const aa of ed.answers)
               a[String(aa.question_id)] = String(aa.chosen_option_index + 1);
             setEldQAnswers(a);
-            console.log("[perfil] loaded answers:", Object.keys(a).length);
           }
         })
-        .catch((e) => console.log("[perfil] getElderDetail error:", e))
+        .catch(() => {})
         .finally(() => setEldProfLoad(false));
       getElderAssessmentResults(token, elderId)
         .then(setEldResults)
         .catch(() => {});
+      // Fetch case peers for this elder
+      listMyCases(token).then((cases) => {
+        const match = cases.find((c) => c.elder_id === elderId);
+        if (match) {
+          setCasePeers({
+            volunteer1: match.volunteer1_name ? { id: match.volunteer1_id, name: match.volunteer1_name } : null,
+            volunteer2: match.volunteer2_name ? { id: match.volunteer2_id!, name: match.volunteer2_name } : null,
+            supervisor: match.supervisor_name ? { id: match.supervisor_id, name: match.supervisor_name } : null,
+          });
+        }
+      }).catch(() => {});
       fetch(
         `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"}/elders/questions/grouped`,
         { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
@@ -172,7 +197,6 @@ function PainelContent() {
         .then((r) => r.json())
         .then((d) => {
           setEldQGroups(d.categories || []);
-          console.log("[perfil] loaded questions:", d.total_questions);
         })
         .catch(() => {});
     }
@@ -418,8 +442,20 @@ function PainelContent() {
     };
   };
 
-  const currentElders = eldTab === "mine" ? elders : availElders;
-  const filtered = currentElders.filter(
+  const openPeerDetail = async (userId: string) => {
+    if (!token) return;
+    setPeerDetailLoading(true);
+    try {
+      const user = await getUserBasicInfo(token, userId);
+      setPeerDetail({ name: user.name, email: user.email, phone: user.phone });
+    } catch {
+      setPeerDetail({ name: "—", email: "—", phone: null });
+    } finally {
+      setPeerDetailLoading(false);
+    }
+  };
+
+  const filtered = elders.filter(
     (e) =>
       (!sq || (e.name || "").toLowerCase().includes(sq.toLowerCase())) &&
       (!sf || e.status === sf),
@@ -458,8 +494,8 @@ function PainelContent() {
     return (
       <div className="flex min-h-screen">
         <MobileHeader />
+        <Sidebar activeItem="painel" />
         <main className="flex-1 overflow-y-auto pt-16 lg:pt-0">
-          <Sidebar activeItem="painel" />
           <div className="mx-auto max-w-3xl space-y-6 p-4 lg:p-8">
             <Button
               variant="ghost"
@@ -652,22 +688,6 @@ function PainelContent() {
               </Button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-4 border-b border-border">
-              <button
-                onClick={() => setEldTab("mine")}
-                className={`pb-2 text-sm font-medium ${eldTab === "mine" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-              >
-                Meus Idosos ({elders.length})
-              </button>
-              <button
-                onClick={() => setEldTab("available")}
-                className={`pb-2 text-sm font-medium ${eldTab === "available" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-              >
-                Disponiveis ({availElders.length})
-              </button>
-            </div>
-
             <Card className="border-border bg-card shadow-sm">
               <CardContent className="p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
@@ -816,6 +836,81 @@ function PainelContent() {
                   </div>
                 </div>
 
+                {/* Case Peers */}
+                {casePeers && (
+                  <Card className="border-border bg-card shadow-sm">
+                    <CardContent className="p-5">
+                      <h3 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
+                        <Users className="h-5 w-5 text-primary" />
+                        Equipa do Caso
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={() => casePeers.volunteer1 && openPeerDetail(casePeers.volunteer1.id)}
+                          disabled={!casePeers.volunteer1}
+                          className="rounded-lg border border-border bg-secondary/20 p-3 text-center transition-colors hover:bg-secondary/50 disabled:opacity-50"
+                        >
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Voluntário 1</p>
+                          <p className="mt-1 font-medium text-foreground">{casePeers.volunteer1?.name || "—"}</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => casePeers.volunteer2 && openPeerDetail(casePeers.volunteer2.id)}
+                          disabled={!casePeers.volunteer2}
+                          className="rounded-lg border border-border bg-secondary/20 p-3 text-center transition-colors hover:bg-secondary/50 disabled:opacity-50"
+                        >
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Voluntário 2</p>
+                          <p className="mt-1 font-medium text-foreground">{casePeers.volunteer2?.name || "—"}</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => casePeers.supervisor && openPeerDetail(casePeers.supervisor.id)}
+                          disabled={!casePeers.supervisor}
+                          className="rounded-lg border border-border bg-secondary/20 p-3 text-center transition-colors hover:bg-secondary/50 disabled:opacity-50"
+                        >
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Supervisor</p>
+                          <p className="mt-1 font-medium text-foreground">{casePeers.supervisor?.name || "—"}</p>
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Peer Detail Dialog */}
+                <Dialog open={!!peerDetail} onOpenChange={(o) => { if (!o) setPeerDetail(null) }}>
+                  <DialogContent className="rounded-2xl sm:max-w-sm">
+                    {peerDetailLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : peerDetail ? (
+                      <>
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary">
+                              {peerDetail.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-lg">{peerDetail.name}</p>
+                              <p className="text-sm font-normal text-muted-foreground">Membro da equipa</p>
+                            </div>
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3 text-sm text-muted-foreground">
+                          <p><span className="font-medium text-foreground">Email:</span> {peerDetail.email}</p>
+                          <p><span className="font-medium text-foreground">Telefone:</span> {peerDetail.phone || "—"}</p>
+                        </div>
+                        <DialogFooter>
+                          <Button className="rounded-xl" onClick={() => setPeerDetail(null)}>
+                            Fechar
+                          </Button>
+                        </DialogFooter>
+                      </>
+                    ) : null}
+                  </DialogContent>
+                </Dialog>
+
                 {/* Contact Info Grid */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {elderProfile.phone && (
@@ -960,9 +1055,9 @@ function PainelContent() {
                               {cat.questions.length > 0 && (
                                 <div className="mb-3 h-1.5 rounded-full bg-secondary">
                                   <div
-                                    className={`h-full rounded-full ${isComp ? "bg-green-500" : "bg-primary"}`}
+                                    className={`h-full rounded-full ${interp ? (interp.percentage >= 75 ? "bg-green-500" : interp.percentage >= 50 ? "bg-amber-500" : "bg-red-500") : "bg-primary"}`}
                                     style={{
-                                      width: `${Math.round((answered / cat.questions.length) * 100)}%`,
+                                      width: `${interp ? Math.round(interp.percentage) : Math.round((answered / cat.questions.length) * 100)}%`,
                                     }}
                                   />
                                 </div>
@@ -974,8 +1069,10 @@ function PainelContent() {
                                   </p>
                                   <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">
-                                      {answered}/{cat.questions.length}{" "}
-                                      perguntas
+                                      Pontuação
+                                    </span>
+                                    <span className="font-medium">
+                                      {interp.score}/{interp.max} ({interp.percentage}%)
                                     </span>
                                   </div>
                                   <p className="text-sm text-muted-foreground">
@@ -1212,19 +1309,27 @@ function PainelContent() {
                         {cat.questions.length > 0 && (
                           <div className="mt-3 mb-3 h-1.5 rounded-full bg-secondary">
                             <div
-                              className={`h-full rounded-full ${isComp ? "bg-green-500" : "bg-primary"}`}
+                              className={`h-full rounded-full ${interp ? (interp.percentage >= 75 ? "bg-green-500" : interp.percentage >= 50 ? "bg-amber-500" : "bg-red-500") : "bg-primary"}`}
                               style={{
-                                width: `${Math.round((answered / cat.questions.length) * 100)}%`,
+                                width: `${interp ? Math.round(interp.percentage) : Math.round((answered / cat.questions.length) * 100)}%`,
                               }}
                             />
                           </div>
                         )}
                         {interp ? (
-                          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3">
+                          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 space-y-1.5">
                             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
                               Interpretação
                             </p>
-                            <p className="mt-1 text-sm text-emerald-950/80">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Pontuação
+                              </span>
+                              <span className="font-medium">
+                                {interp.score}/{interp.max} ({interp.percentage}%)
+                              </span>
+                            </div>
+                            <p className="text-sm text-emerald-950/80">
                               {interp.interpretation}
                             </p>
                           </div>
