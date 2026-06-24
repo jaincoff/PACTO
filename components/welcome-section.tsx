@@ -1,4 +1,4 @@
-import Image from "next/image"
+import Image from "next/image";
 
 export function WelcomeSection() {
   return (
@@ -12,13 +12,14 @@ export function WelcomeSection() {
             Voluntariado Compassivo e Intergeracional
           </p>
           <p className="text-base leading-relaxed text-muted-foreground">
-            O PACTO promove o encontro entre voluntários e idosos, criando ligações 
-            significativas, combatendo a solidão e promovendo o bem-estar e a inclusão social.
+            O PACTO promove o encontro entre voluntários e idosos, criando
+            ligações significativas, combatendo a solidão e promovendo o
+            bem-estar e a inclusão social.
           </p>
         </div>
-        
+
         {/* Hero Illustration */}
-        <div className="relative h-64 w-full lg:h-80 lg:w-96">
+        {/* <div className="relative h-64 w-full lg:h-80 lg:w-96">
           <Image
             src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/file_00000000a7a071f492c0dd90825f47bd-GF8AjUntrdSv904yQOmzQmbK8UItwc.png"
             alt="Ilustração de um voluntário jovem e uma pessoa idosa de mãos dadas, representando a conexão intergeracional do PACTO"
@@ -26,8 +27,28 @@ export function WelcomeSection() {
             className="object-contain"
             priority
           />
+        </div> */}
+
+        <div className="relative h-64 w-full lg:h-80 lg:w-96">
+          <img
+            alt="Ilustração de dois voluntários jovens com t-shirts PACTO ao lado de um homem idoso, representando a conexão intergeracional do PACTO"
+            decoding="async"
+            data-nimg="fill"
+            className="object-contain"
+            style={{
+              position: "absolute",
+              height: "100%",
+              width: "100%",
+              left: 0,
+              top: 0,
+              right: 0,
+              bottom: 0,
+              color: "transparent",
+            }}
+            src="/images/dashboard-illustration.png"
+          />
         </div>
       </div>
     </section>
-  )
+  );
 }
