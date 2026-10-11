@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useProfileContext } from "@/components/profile-provider";
 import {
   Eye,
   EyeOff,
@@ -21,16 +22,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   getDashboardRouteForRole,
-  getStoredAuthToken,
-  getStoredAuthUser,
-  getCurrentUserProfile,
-  clearAuthSession,
   loginRequest,
   persistAuthSession,
 } from "../../lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
+  const {
+    reload: reloadProfile,
+    profile: authProfile,
+    loading: profileLoading,
+  } = useProfileContext();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,25 +40,12 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Redirect if already authenticated — verify token with API first
+  // Redirect if already authenticated — the shared profile provider fetches
+  // /users/me once on load, so just react to its result.
   useEffect(() => {
-    const token = getStoredAuthToken();
-    const user = getStoredAuthUser();
-    if (!token || !user?.role) return;
-
-    let cancelled = false;
-    getCurrentUserProfile(token)
-      .then((prof) => {
-        if (cancelled) return;
-        router.replace(getDashboardRouteForRole(prof.role));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        clearAuthSession();
-      });
-
-    return () => { cancelled = true; };
-  }, []);
+    if (profileLoading || !authProfile?.role) return;
+    router.replace(getDashboardRouteForRole(authProfile.role));
+  }, [authProfile, profileLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +55,7 @@ export default function LoginPage() {
     try {
       const payload = await loginRequest(email, password);
       persistAuthSession(payload, rememberMe);
+      reloadProfile();
       router.push(getDashboardRouteForRole(payload.user.role));
     } catch (error) {
       setErrorMessage(

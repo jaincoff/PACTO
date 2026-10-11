@@ -21,10 +21,10 @@ import {
   EyeOff,
 } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
+import { useProfileContext } from "@/components/profile-provider";
 import {
   clearAuthSession,
   type CurrentUserProfile,
-  getCurrentUserProfile,
   getStoredAuthToken,
   updateMyProfile,
   uploadProfilePhoto,
@@ -33,6 +33,12 @@ import {
 
 export default function AdminPerfilPage() {
   const router = useRouter();
+  const {
+    profile: sharedProfile,
+    loading: sharedLoading,
+    error: sharedError,
+    reload: reloadProfile,
+  } = useProfileContext();
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -53,37 +59,28 @@ export default function AdminPerfilPage() {
     sexo: "Prefiro nao dizer",
   });
 
+  // Reuse the single GET /users/me already fetched by ProfileProvider
+  // instead of firing a second identical request from this page.
   useEffect(() => {
-    async function loadProfile() {
-      const token = getStoredAuthToken();
-      if (!token) {
-        setError("Sessao expirada. Inicie sessao novamente.");
-        setLoading(false);
-        return;
-      }
+    if (!sharedProfile) return;
+    setProfile(sharedProfile);
+    setFormData((current) => ({
+      ...current,
+      nomeCompleto: sharedProfile.name,
+      email: sharedProfile.email,
+      telemovel: sharedProfile.phone || "",
+      anoNascimento: sharedProfile.birth_year ? sharedProfile.birth_year.toString() : "",
+      sexo: sharedProfile.gender || "Prefiro nao dizer",
+    }));
+  }, [sharedProfile]);
 
-      try {
-        const data = await getCurrentUserProfile(token);
-        setProfile(data);
-        setFormData((current) => ({
-          ...current,
-          nomeCompleto: data.name,
-          email: data.email,
-          telemovel: data.phone || "",
-          anoNascimento: data.birth_year ? data.birth_year.toString() : "",
-          sexo: data.gender || "Prefiro nao dizer",
-        }));
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Falha ao carregar perfil.",
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
+  useEffect(() => {
+    if (!sharedLoading) setLoading(false);
+  }, [sharedLoading]);
 
-    loadProfile();
-  }, []);
+  useEffect(() => {
+    if (sharedError) setError(sharedError);
+  }, [sharedError]);
 
   const roleLabel = useMemo(() => {
     switch (profile?.role) {
@@ -110,6 +107,7 @@ export default function AdminPerfilPage() {
     try {
       const result = await uploadProfilePhoto(token, file);
       setProfile((prev) => prev ? { ...prev, photo: result.photo } : prev);
+      reloadProfile();
       setSuccess("Foto atualizada com sucesso.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao atualizar foto.");
@@ -128,6 +126,7 @@ export default function AdminPerfilPage() {
     try {
       await deleteProfilePhoto(token);
       setProfile((prev) => prev ? { ...prev, photo: null } : prev);
+      reloadProfile();
       setSuccess("Foto eliminada com sucesso.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao eliminar foto.");
@@ -157,6 +156,7 @@ export default function AdminPerfilPage() {
         gender: formData.sexo !== "Prefiro nao dizer" ? formData.sexo : undefined,
       });
       setProfile(updated);
+      reloadProfile();
       setSuccess("Perfil atualizado com sucesso.");
     } catch (err) {
       setError(

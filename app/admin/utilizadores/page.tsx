@@ -15,6 +15,7 @@ import {
   UserX,
   Trash2,
   Users,
+  ChevronDown,
 } from "lucide-react";
 import {
   getStoredAuthToken,
@@ -27,6 +28,7 @@ import {
   type AdminUserListItem,
   type VolunteerTestDetail,
   type AssessmentResultsResponse,
+  type AssessmentCategoryResult,
 } from "../../../lib/api";
 import {
   RadarChart,
@@ -360,14 +362,22 @@ export default function AdminUtilizadoresPage() {
                       const typeMeta = getTypeLabel(user.role);
                       return (
                         <React.Fragment key={user.id}>
-                          <tr
-                            className="border-b border-border last:border-0 hover:bg-secondary/20"
-                          >
-                            <td className="px-6 py-4">
-                              <span className="font-medium text-foreground">
-                                {user.name || user.email}
-                              </span>
-                            </td>
+<tr
+  className="cursor-pointer border-b border-border last:border-0 hover:bg-secondary/20"
+  onClick={() => handleViewResults(user.id)}
+>
+  <td className="px-6 py-4">
+    <div className="flex items-center gap-2">
+      <ChevronDown
+        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
+          viewingResults === user.id ? "" : "-rotate-90"
+        }`}
+      />
+      <span className="font-medium text-foreground">
+        {user.name || user.email}
+      </span>
+    </div>
+  </td>
                             <td className="px-6 py-4 text-sm text-muted-foreground">
                               {user.email}
                             </td>
@@ -390,8 +400,8 @@ export default function AdminUtilizadoresPage() {
                                 user.created_at,
                               ).toLocaleDateString("pt-PT")}
                             </td>
-                            <td className="px-6 py-4">
-                            <div className="flex items-center justify-end gap-1">
+<td className="px-6 py-4">
+  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Ver Resultados" onClick={() => handleViewResults(user.id)}>
                                 <Eye className={`h-4 w-4 ${viewingResults === user.id ? "text-primary" : "text-blue-600"}`} />
                               </Button>
@@ -503,13 +513,30 @@ export default function AdminUtilizadoresPage() {
                               </td>
                             </tr>
                           )}
-                          {viewingResults === user.id && (
-                            <tr><td colSpan={6} className="bg-secondary/10 px-6 py-4">
-                              {loadingDetail ? <p className="text-sm text-muted-foreground">A carregar...</p>
-                              : userResults?.results ? <div className="space-y-3">{Object.entries(userResults.results).map(([k,r])=>{const lc=r.level==="elevado"||r.level==="elevada"||r.level==="elevadas"?"bg-green-100 text-green-700":r.level==="moderado"||r.level==="moderada"||r.level==="moderadas"?"bg-amber-100 text-amber-700":"bg-red-100 text-red-700";return(<div key={k}><div className="mb-1 flex items-center justify-between"><span className="text-sm font-medium">{r.label}</span><div className="flex items-center gap-2"><span className="text-sm">{r.score}/{r.max} ({r.percentage}%)</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${lc}`}>{r.level}</span></div></div><div className="mb-2 h-1.5 rounded-full bg-secondary"><div className={`h-full rounded-full ${r.percentage>=75?"bg-green-500":r.percentage>=50?"bg-amber-500":"bg-red-500"}`} style={{width:`${r.percentage}%`}}/></div>{r.dimensions&&Object.keys(r.dimensions).length>0&&<div className="rounded-lg bg-white p-2"><ResponsiveContainer width="100%" height={130}><RadarChart data={Object.entries(r.dimensions).map(([dk,dv])=>({dimension:dv.label||dk,value:dv.average,fullMark:5}))}><PolarGrid stroke="#e5e7eb"/><PolarAngleAxis dataKey="dimension" tick={{fontSize:9,fill:"#6b7280"}}/><PolarRadiusAxis domain={[0,5]} tick={{fontSize:8,fill:"#9ca3af"}}/><Radar dataKey="value" stroke="#e6842d" fill="#e6842d" fillOpacity={0.2}/></RadarChart></ResponsiveContainer></div>}</div>)})}</div>
-                              : <p className="text-sm text-muted-foreground">Nenhum resultado.</p>}
-                            </td></tr>
-                          )}
+{viewingResults === user.id && (
+  <tr>
+    <td
+      colSpan={6}
+      className="bg-secondary/30 px-6 py-4"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {loadingDetail ? (
+        <p className="text-sm text-muted-foreground">A carregar...</p>
+      ) : userResults?.results &&
+        Object.keys(userResults.results).length > 0 ? (
+        <div className="space-y-3">
+          {Object.entries(userResults.results).map(([k, r]) => (
+            <CategoryResultCard key={k} result={r} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Nenhum resultado de avaliacao para este utilizador.
+        </p>
+      )}
+    </td>
+  </tr>
+)}
                         </React.Fragment>
                       );
                     })}
@@ -528,6 +555,97 @@ export default function AdminUtilizadoresPage() {
           </Card>
         </div>
       </main>
+    </div>
+  );
+}
+
+function CategoryResultCard({ result }: { result: AssessmentCategoryResult }) {
+  const isHigh =
+    result.level === "elevado" ||
+    result.level === "elevada" ||
+    result.level === "elevadas";
+  const isModerate =
+    result.level === "moderado" ||
+    result.level === "moderada" ||
+    result.level === "moderadas";
+  const levelColor = isHigh
+    ? "bg-green-100 text-green-700"
+    : isModerate
+      ? "bg-amber-100 text-amber-700"
+      : "bg-red-100 text-red-700";
+  const dims = result.dimensions ? Object.entries(result.dimensions) : [];
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-foreground">
+          {result.label}
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {result.score}/{result.max} ({result.percentage || 0}%)
+          </span>
+          {result.level ? (
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${levelColor}`}
+            >
+              {result.level}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mb-3 h-1.5 rounded-full bg-secondary">
+        <div
+          className={`h-full rounded-full ${
+            (result.percentage || 0) >= 75
+              ? "bg-green-500"
+              : (result.percentage || 0) >= 50
+                ? "bg-amber-500"
+                : "bg-red-500"
+          }`}
+          style={{ width: `${result.percentage || 0}%` }}
+        />
+      </div>
+
+      {result.interpretation ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {result.interpretation}
+        </p>
+      ) : null}
+
+      {dims.length > 0 && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Dimensoes
+          </p>
+          <ResponsiveContainer width="100%" height={160}>
+            <RadarChart
+              data={dims.map(([dk, dv]) => ({
+                dimension: dv.label || dk,
+                value: dv.average,
+                fullMark: 5,
+              }))}
+            >
+              <PolarGrid stroke="#e5e7eb" />
+              <PolarAngleAxis
+                dataKey="dimension"
+                tick={{ fontSize: 9, fill: "#6b7280" }}
+              />
+              <PolarRadiusAxis
+                domain={[0, 5]}
+                tick={{ fontSize: 8, fill: "#9ca3af" }}
+              />
+              <Radar
+                dataKey="value"
+                stroke="#e6842d"
+                fill="#e6842d"
+                fillOpacity={0.2}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Brain,
   Heart,
@@ -123,9 +124,11 @@ export default function AdminAvaliacoesPage() {
 
   // New question form state
   const [showNewForm, setShowNewForm] = useState(false);
+  const [categoryChoice, setCategoryChoice] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newText, setNewText] = useState("");
   const [newOptions, setNewOptions] = useState("");
+  const [showJsonSuggestion, setShowJsonSuggestion] = useState(false);
 
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -169,25 +172,63 @@ export default function AdminAvaliacoesPage() {
   const currentMeta =
     tab === "elder" ? assessCategoryMeta : testCategoryMeta;
 
+  const existingCategories = [
+    ...new Set(
+      currentAll
+        .map((q) => q.category)
+        .filter((c): c is string => Boolean(c)),
+    ),
+  ];
+
+  const categoryLabel = (key: string) => currentMeta[key]?.label || key;
+
   // ── Handlers ──
+
+  const parseNewOptions = (): Array<{ text: string; points: number }> => {
+    const lines = newOptions
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) {
+      return [
+        { text: "Sim", points: 10 },
+        { text: "Nao", points: 0 },
+      ];
+    }
+    const parsed = lines.map((line) => {
+      const pipeIdx = line.lastIndexOf("|");
+      if (pipeIdx > 0) {
+        const text = line.slice(0, pipeIdx).trim();
+        const num = Number(line.slice(pipeIdx + 1).trim());
+        return { text, points: Number.isFinite(num) ? num : null };
+      }
+      return { text: line, points: null };
+    });
+    const n = parsed.length;
+    return parsed.map((p, i) => ({
+      text: p.text,
+      points: p.points ?? Math.round((10 * (n - 1 - i)) / (n - 1 || 1)),
+    }));
+  };
+
+  const generatedJson = JSON.stringify(parseNewOptions(), null, 2);
 
   const handleCreate = async () => {
     if (!newText.trim() || !token) return;
     setLoading(true);
     try {
-      let opts: Array<{ text: string; points: number }> = [];
-      try {
-        opts = JSON.parse(newOptions || '[{"text":"Sim","points":10},{"text":"Nao","points":0}]');
-      } catch {
-        opts = [{ text: "Sim", points: 10 }, { text: "Nao", points: 0 }];
-      }
+      const opts = parseNewOptions();
+      const cat =
+        categoryChoice === "__new__" && newCategory.trim()
+          ? newCategory.trim()
+          : categoryChoice || undefined;
 
       if (tab === "elder") {
         await createAssessmentQuestion(token, {
           question_text: newText,
           options: opts,
           order: currentAll.length + 1,
-          category: newCategory || undefined,
+          category: cat,
         });
       } else {
         await createTestQuestion(token, {
@@ -195,13 +236,15 @@ export default function AdminAvaliacoesPage() {
           question_text: newText,
           options: opts,
           order: currentAll.length + 1,
-          category: newCategory || undefined,
+          category: cat,
         });
       }
 
       setNewText("");
       setNewCategory("");
       setNewOptions("");
+      setCategoryChoice("");
+      setShowJsonSuggestion(false);
       setShowNewForm(false);
       setSuccessMsg("Questao criada com sucesso.");
       setTimeout(() => setSuccessMsg(""), 3000);
@@ -354,20 +397,36 @@ export default function AdminAvaliacoesPage() {
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Categoria (chave)</Label>
-                    <Input
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      placeholder={
-                        tab === "elder"
-                          ? "Ex: loneliness, physical..."
-                          : tab === "supervisor"
-                            ? "supervisor"
-                            : "Ex: bem-estar-psicologico, capacidade-compassiva..."
-                      }
-                      className="h-10 rounded-xl"
-                    />
+                    <Label>Categoria</Label>
+                    <select
+                      value={categoryChoice}
+                      onChange={(e) => setCategoryChoice(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">Sem categoria</option>
+                      {existingCategories.map((c) => (
+                        <option key={c} value={c}>
+                          {categoryLabel(c)}
+                        </option>
+                      ))}
+                      <option value="__new__">+ Nova categoria ...</option>
+                    </select>
                   </div>
+                  {categoryChoice === "__new__" && (
+                    <div className="space-y-2">
+                      <Label>Nova categoria (chave)</Label>
+                      <Input
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        placeholder={
+                          tab === "elder"
+                            ? "Ex: loneliness, physical..."
+                            : "Ex: bem-estar-psicologico, capacidade-compassiva..."
+                        }
+                        className="h-10 rounded-xl"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>Funcao</Label>
                     <div className="flex h-10 items-center rounded-xl border border-border bg-muted px-4 text-sm text-muted-foreground">
@@ -385,15 +444,38 @@ export default function AdminAvaliacoesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>
-                    Opcoes (JSON: [&#123;"text":"...","points":N&#125;,...])
-                  </Label>
-                  <Input
+                  <Label>Respostas</Label>
+                  <Textarea
                     value={newOptions}
                     onChange={(e) => setNewOptions(e.target.value)}
-                    placeholder='[{"text":"Sim","points":10},{"text":"Nao","points":0}]'
-                    className="h-10 rounded-xl font-mono text-xs"
+                    placeholder={
+                      "Uma resposta por linha (opcional).\n\nEx:\nSim\nNao\n\nPara definir pontos manualmente:\nSim | 10\nNao | 0"
+                    }
+                    className="min-h-[96px] rounded-xl text-sm"
                   />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Opcional. Se vazio, usa "Sim"/"Nao" (10/0). Pontos
+                      automaticos por ordem (ex: 5 respostas = 10, 8, 5, 3,
+                      0).
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 gap-1 rounded-lg px-2 text-xs"
+                      onClick={() => setShowJsonSuggestion((s) => !s)}
+                    >
+                      {showJsonSuggestion
+                        ? "Ocultar JSON"
+                        : "Ver JSON (sugestao)"}
+                    </Button>
+                  </div>
+                  {showJsonSuggestion && (
+                    <pre className="max-h-48 overflow-auto rounded-xl border border-border bg-muted p-3 font-mono text-xs text-muted-foreground">
+                      {generatedJson}
+                    </pre>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -409,7 +491,11 @@ export default function AdminAvaliacoesPage() {
                     size="sm"
                     variant="outline"
                     className="rounded-xl"
-                    onClick={() => setShowNewForm(false)}
+                    onClick={() => {
+                      setShowNewForm(false);
+                      setShowJsonSuggestion(false);
+                      setCategoryChoice("");
+                    }}
                   >
                     Cancelar
                   </Button>

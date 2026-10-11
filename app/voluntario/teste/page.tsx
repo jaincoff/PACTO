@@ -549,7 +549,7 @@ function TestePageContent() {
                       : ""}
                   </span>
                   <h2 className="text-base font-semibold text-foreground">
-                    {currentCatMeta.label || selectedCategory}
+                    {selectedCategory}
                   </h2>
                 </div>
               </div>

@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  getCurrentUserProfile,
   getStoredAuthToken,
   clearAuthSession,
   getDashboardRouteForRole,
   type CurrentUserProfile,
 } from "@/lib/api";
+import { useProfileContext } from "@/components/profile-provider";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
@@ -30,64 +30,55 @@ export function AuthGuard({
   children,
 }: AuthGuardProps) {
   const router = useRouter();
-  const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
-  const [checking, setChecking] = useState(true);
+  const { profile, loading: profileLoading, error, reload } = useProfileContext();
   const [authError, setAuthError] = useState(false);
-  const [retry, setRetry] = useState(0);
 
   const doCheck = useCallback(() => {
-    setAuthError(false);
-    setChecking(true);
-
     const token = getStoredAuthToken();
     if (!token) {
       if (!redirectIfAuthenticated) {
         router.replace("/login");
-      } else {
-        setChecking(false);
       }
       return;
     }
 
-    getCurrentUserProfile(token)
-      .then((prof) => {
-        setProfile(prof);
+    if (error) {
+      setAuthError(true);
+      return;
+    }
 
-        if (redirectIfAuthenticated) {
-          router.replace(getDashboardRouteForRole(prof.role));
-          return;
-        }
+    if (!profile) return;
 
-        if (roles && roles.length > 0 && !roles.includes(prof.role)) {
-          router.replace(getDashboardRouteForRole(prof.role));
-          return;
-        }
+    if (redirectIfAuthenticated) {
+      router.replace(getDashboardRouteForRole(profile.role));
+      return;
+    }
 
-        if (statuses.length > 0 && !statuses.includes("any")) {
-          if (!statuses.includes(prof.status as AllowedStatus)) {
-            router.replace(getDashboardRouteForRole(prof.role));
-            return;
-          }
-        }
+    if (roles && roles.length > 0 && !roles.includes(profile.role)) {
+      router.replace(getDashboardRouteForRole(profile.role));
+      return;
+    }
 
-        if (prof.status === "inactive") {
-          router.replace("/");
-          return;
-        }
+    if (statuses.length > 0 && !statuses.includes("any")) {
+      if (!statuses.includes(profile.status as AllowedStatus)) {
+        router.replace(getDashboardRouteForRole(profile.role));
+        return;
+      }
+    }
 
-        setChecking(false);
-      })
-      .catch(() => {
-        setAuthError(true);
-        setChecking(false);
-      });
-  }, []);
+    if (profile.status === "inactive") {
+      router.replace("/");
+      return;
+    }
+
+    setAuthError(false);
+  }, [roles, statuses, redirectIfAuthenticated, router, profile, error]);
 
   useEffect(() => {
     doCheck();
-  }, [doCheck, retry]);
+  }, [doCheck]);
 
-  if (checking || redirectIfAuthenticated) {
+  if (profileLoading || redirectIfAuthenticated) {
     return (
       loading || (
         <div className="flex min-h-screen items-center justify-center bg-background">
@@ -117,7 +108,10 @@ export function AuthGuard({
           <div className="flex flex-col gap-2">
             <Button
               className="rounded-xl"
-              onClick={() => setRetry((r) => r + 1)}
+              onClick={() => {
+                setAuthError(false);
+                reload();
+              }}
             >
               Tentar novamente
             </Button>
