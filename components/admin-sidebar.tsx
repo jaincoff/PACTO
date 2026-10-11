@@ -51,6 +51,12 @@ export function AdminSidebar({ activeItem = "painel" }: AdminSidebarProps) {
       href: "/admin/avaliacoes",
     },
     {
+      id: "avaliacoes-config",
+      label: "Config. Avaliacoes",
+      icon: Settings,
+      href: "/admin/avaliacoes-config",
+    },
+    {
       id: "exportacao",
       label: "Exportacao de Dados",
       icon: Download,

@@ -52,11 +52,14 @@ import {
   getElderAssessmentResults,
   getElderDetail,
   getElderPhotoUrl,
+  getElderQuestionnaireGroups,
+  postElderAnswer as postElderAnswerRequest,
   listMyCases,
   getUserBasicInfo,
   type ElderAssessmentResultsResponse,
   type ElderListItem,
   type ElderDetail,
+  type DashboardOverview,
 } from "../../../lib/api";
 
 export default function PainelPage() {
@@ -157,7 +160,11 @@ function PainelContent() {
     volunteer2: { id: string; name: string } | null;
     supervisor: { id: string; name: string } | null;
   } | null>(null);
-  const [peerDetail, setPeerDetail] = useState<{ name: string; email: string; phone: string | null } | null>(null);
+  const [peerDetail, setPeerDetail] = useState<{
+    name: string;
+    email: string;
+    phone: string | null;
+  } | null>(null);
   const [peerDetailLoading, setPeerDetailLoading] = useState(false);
 
   useEffect(() => {
@@ -180,21 +187,25 @@ function PainelContent() {
         .then(setEldResults)
         .catch(() => {});
       // Fetch case peers for this elder
-      listMyCases(token).then((cases) => {
-        const match = cases.find((c) => c.elder_id === elderId);
-        if (match) {
-          setCasePeers({
-            volunteer1: match.volunteer1_name ? { id: match.volunteer1_id, name: match.volunteer1_name } : null,
-            volunteer2: match.volunteer2_name ? { id: match.volunteer2_id!, name: match.volunteer2_name } : null,
-            supervisor: match.supervisor_name ? { id: match.supervisor_id, name: match.supervisor_name } : null,
-          });
-        }
-      }).catch(() => {});
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"}/elders/questions/grouped`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
-      )
-        .then((r) => r.json())
+      listMyCases(token)
+        .then((cases) => {
+          const match = cases.find((c) => c.elder_id === elderId);
+          if (match) {
+            setCasePeers({
+              volunteer1: match.volunteer1_name
+                ? { id: match.volunteer1_id, name: match.volunteer1_name }
+                : null,
+              volunteer2: match.volunteer2_name
+                ? { id: match.volunteer2_id!, name: match.volunteer2_name }
+                : null,
+              supervisor: match.supervisor_name
+                ? { id: match.supervisor_id, name: match.supervisor_name }
+                : null,
+            });
+          }
+        })
+        .catch(() => {});
+      getElderQuestionnaireGroups(token)
         .then((d) => {
           setEldQGroups(d.categories || []);
         })
@@ -212,11 +223,7 @@ function PainelContent() {
     useState<ElderAssessmentResultsResponse | null>(null);
   useEffect(() => {
     if (action === "eldertest" && elderId && token) {
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"}/elders/questions/grouped`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
-      )
-        .then((r) => r.json())
+      getElderQuestionnaireGroups(token)
         .then((d) => {
           setEldQGroups(d.categories || []);
           if (eldCatParam) setEldQCat(eldCatParam);
@@ -255,20 +262,7 @@ function PainelContent() {
   const postElderAnswer = async (qId: string, idx: number) => {
     if (!token || !elderId) return;
     setEldQSaving(true);
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"}/elders/${elderId}/questionnaire/answer`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          question_id: Number(qId),
-          chosen_option_index: idx,
-        }),
-      },
-    )
+    postElderAnswerRequest(token, elderId, Number(qId), idx)
       .catch(() => {})
       .finally(() => setEldQSaving(false));
   };
@@ -475,7 +469,7 @@ function PainelContent() {
     try {
       await createElder(token, {
         name: nome.trim(),
-        age: ano ? new Date().getFullYear() - parseInt(ano) : null,
+        age: ano ? new Date().getFullYear() - parseInt(ano) : undefined,
         email: eml || undefined,
         phone: tel || undefined,
         address: addr || undefined,
@@ -751,7 +745,13 @@ function PainelContent() {
                           className={`absolute right-4 top-4 h-3 w-3 rounded-full ${sc}`}
                           title={sl}
                         />
-                        <UserAvatar photo={getElderPhotoUrl(p.id, p.photo)} name={p.name} gender={undefined} size={96} className="mb-4 shadow-md" />
+                        <UserAvatar
+                          photo={getElderPhotoUrl(p.id, p.photo)}
+                          name={p.name}
+                          gender={undefined}
+                          size={96}
+                          className="mb-4 shadow-md"
+                        />
                         <h3 className="mb-2 text-lg font-semibold">{p.name}</h3>
                         <span className="text-sm text-muted-foreground">
                           {p.age ? `${p.age} anos` : ""}
@@ -821,7 +821,13 @@ function PainelContent() {
               <>
                 {/* Profile Header */}
                 <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-6 sm:flex-row sm:items-start">
-                  <UserAvatar photo={getElderPhotoUrl(elderId, elderProfile.photo)} name={elderProfile.name} gender={undefined} size={112} className="shrink-0 shadow-lg" />
+                  <UserAvatar
+                    photo={getElderPhotoUrl(elderId, elderProfile.photo)}
+                    name={elderProfile.name}
+                    gender={undefined}
+                    size={112}
+                    className="shrink-0 shadow-lg"
+                  />
                   <div className="flex-1 text-center sm:text-left">
                     <h1 className="text-2xl font-bold">{elderProfile.name}</h1>
                     <p className="text-sm text-muted-foreground">
@@ -847,30 +853,51 @@ function PainelContent() {
                       <div className="grid gap-3 sm:grid-cols-3">
                         <button
                           type="button"
-                          onClick={() => casePeers.volunteer1 && openPeerDetail(casePeers.volunteer1.id)}
+                          onClick={() =>
+                            casePeers.volunteer1 &&
+                            openPeerDetail(casePeers.volunteer1.id)
+                          }
                           disabled={!casePeers.volunteer1}
                           className="rounded-lg border border-border bg-secondary/20 p-3 text-center transition-colors hover:bg-secondary/50 disabled:opacity-50"
                         >
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Voluntário 1</p>
-                          <p className="mt-1 font-medium text-foreground">{casePeers.volunteer1?.name || "—"}</p>
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Voluntário 1
+                          </p>
+                          <p className="mt-1 font-medium text-foreground">
+                            {casePeers.volunteer1?.name || "—"}
+                          </p>
                         </button>
                         <button
                           type="button"
-                          onClick={() => casePeers.volunteer2 && openPeerDetail(casePeers.volunteer2.id)}
+                          onClick={() =>
+                            casePeers.volunteer2 &&
+                            openPeerDetail(casePeers.volunteer2.id)
+                          }
                           disabled={!casePeers.volunteer2}
                           className="rounded-lg border border-border bg-secondary/20 p-3 text-center transition-colors hover:bg-secondary/50 disabled:opacity-50"
                         >
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Voluntário 2</p>
-                          <p className="mt-1 font-medium text-foreground">{casePeers.volunteer2?.name || "—"}</p>
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Voluntário 2
+                          </p>
+                          <p className="mt-1 font-medium text-foreground">
+                            {casePeers.volunteer2?.name || "—"}
+                          </p>
                         </button>
                         <button
                           type="button"
-                          onClick={() => casePeers.supervisor && openPeerDetail(casePeers.supervisor.id)}
+                          onClick={() =>
+                            casePeers.supervisor &&
+                            openPeerDetail(casePeers.supervisor.id)
+                          }
                           disabled={!casePeers.supervisor}
                           className="rounded-lg border border-border bg-secondary/20 p-3 text-center transition-colors hover:bg-secondary/50 disabled:opacity-50"
                         >
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Supervisor</p>
-                          <p className="mt-1 font-medium text-foreground">{casePeers.supervisor?.name || "—"}</p>
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Supervisor
+                          </p>
+                          <p className="mt-1 font-medium text-foreground">
+                            {casePeers.supervisor?.name || "—"}
+                          </p>
                         </button>
                       </div>
                     </CardContent>
@@ -878,7 +905,12 @@ function PainelContent() {
                 )}
 
                 {/* Peer Detail Dialog */}
-                <Dialog open={!!peerDetail} onOpenChange={(o) => { if (!o) setPeerDetail(null) }}>
+                <Dialog
+                  open={!!peerDetail}
+                  onOpenChange={(o) => {
+                    if (!o) setPeerDetail(null);
+                  }}
+                >
                   <DialogContent className="rounded-2xl sm:max-w-sm">
                     {peerDetailLoading ? (
                       <div className="flex items-center justify-center py-8">
@@ -893,16 +925,31 @@ function PainelContent() {
                             </div>
                             <div>
                               <p className="text-lg">{peerDetail.name}</p>
-                              <p className="text-sm font-normal text-muted-foreground">Membro da equipa</p>
+                              <p className="text-sm font-normal text-muted-foreground">
+                                Membro da equipa
+                              </p>
                             </div>
                           </DialogTitle>
                         </DialogHeader>
                         <div className="space-y-3 text-sm text-muted-foreground">
-                          <p><span className="font-medium text-foreground">Email:</span> {peerDetail.email}</p>
-                          <p><span className="font-medium text-foreground">Telefone:</span> {peerDetail.phone || "—"}</p>
+                          <p>
+                            <span className="font-medium text-foreground">
+                              Email:
+                            </span>{" "}
+                            {peerDetail.email}
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">
+                              Telefone:
+                            </span>{" "}
+                            {peerDetail.phone || "—"}
+                          </p>
                         </div>
                         <DialogFooter>
-                          <Button className="rounded-xl" onClick={() => setPeerDetail(null)}>
+                          <Button
+                            className="rounded-xl"
+                            onClick={() => setPeerDetail(null)}
+                          >
                             Fechar
                           </Button>
                         </DialogFooter>
@@ -1072,7 +1119,8 @@ function PainelContent() {
                                       Pontuação
                                     </span>
                                     <span className="font-medium">
-                                      {interp.score}/{interp.max} ({interp.percentage}%)
+                                      {interp.score}/{interp.max} (
+                                      {interp.percentage}%)
                                     </span>
                                   </div>
                                   <p className="text-sm text-muted-foreground">
@@ -1326,7 +1374,8 @@ function PainelContent() {
                                 Pontuação
                               </span>
                               <span className="font-medium">
-                                {interp.score}/{interp.max} ({interp.percentage}%)
+                                {interp.score}/{interp.max} ({interp.percentage}
+                                %)
                               </span>
                             </div>
                             <p className="text-sm text-emerald-950/80">

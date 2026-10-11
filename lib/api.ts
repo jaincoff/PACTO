@@ -127,6 +127,7 @@ export interface ElderAnswerDetail {
   question_id: number;
   question_text: string;
   chosen_option: string;
+  chosen_option_index: number;
   points: number;
   category: string | null;
 }
@@ -259,14 +260,22 @@ function getApiBaseUrl() {
   return "http://localhost:8000/api/v1";
 }
 
+export class AuthError extends Error {
+  constructor(message = "Sessao expirada.") {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
 async function parseJsonOrThrow(response: Response) {
   if (response.status === 401 || response.status === 403) {
     clearAuthSession();
     if (typeof window !== "undefined") {
       window.location.replace("/");
     }
-    // Return a never-resolving promise to stop further processing
-    return new Promise(() => {});
+    // Reject (instead of the previous never-resolving promise) so awaiting
+    // callers always settle and their loading state can clear.
+    throw new AuthError();
   }
 
   const payload = await response.json().catch(() => ({}));
@@ -280,6 +289,108 @@ async function parseJsonOrThrow(response: Response) {
   }
 
   return payload;
+}
+
+// ── Lightweight GET cache ─────────────────────────────────────────────
+// Two layers: in-memory (for the current SPA session) + localStorage
+// (so the same slow-changing data survives page navigations and reloads
+// and is reused across components/pages instead of re-hitting the API).
+// Every entry is scoped per auth-token hash and cleared on logout.
+
+export const PROFILE_SNAPSHOT_KEY = "pacto.profile.snapshot";
+
+const CACHE_VERSION = "pacto.cache.v1.";
+const MEMORY: Record<string, { value: unknown; expires: number }> = {};
+
+function cacheScope(token?: string | null) {
+  if (!token) return "anon";
+  // djb2 hash — scopes cached data to the session without storing the token
+  let hash = 5381;
+  for (let i = 0; i < token.length; i++) {
+    hash = ((hash << 5) + hash + token.charCodeAt(i)) | 0;
+  }
+  return "tok" + (hash >>> 0).toString(36);
+}
+
+function scopedKey(key: string, token?: string | null) {
+  return `${CACHE_VERSION}${cacheScope(token)}::${key}`;
+}
+
+function readCache(key: string): unknown {
+  const now = Date.now();
+  const entry = MEMORY[key];
+  if (entry) {
+    if (entry.expires > now) return entry.value;
+    delete MEMORY[key];
+  }
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return undefined;
+    const stored = JSON.parse(raw) as { value: unknown; expires: number };
+    if (stored.expires <= now) {
+      window.localStorage.removeItem(key);
+      return undefined;
+    }
+    MEMORY[key] = stored;
+    return stored.value;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCache(key: string, value: unknown, ttlMs: number) {
+  const entry = { value, expires: Date.now() + ttlMs };
+  MEMORY[key] = entry;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(entry));
+    } catch {
+      // storage full/unavailable — the in-memory copy still covers this session
+    }
+  }
+}
+
+function removeMatching(predicate: (key: string) => boolean) {
+  for (const key of Object.keys(MEMORY)) {
+    if (predicate(key)) delete MEMORY[key];
+  }
+  if (typeof window !== "undefined") {
+    try {
+      const ls = window.localStorage;
+      const toRemove: string[] = [];
+      for (let i = 0; i < ls.length; i++) {
+        const key = ls.key(i);
+        if (key && predicate(key)) toRemove.push(key);
+      }
+      for (const key of toRemove) ls.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function invalidateCache(key: string, token?: string | null) {
+  const scope = scopedKey("", token); // "<version><scope>::"
+  removeMatching((k) => k.startsWith(scope) && k.includes(key));
+}
+
+function clearAllCaches() {
+  removeMatching((k) => k.startsWith(CACHE_VERSION));
+}
+
+async function cachedGet<T>(
+  key: string,
+  ttlMs: number,
+  token: string | null | undefined,
+  fetcher: () => Promise<T>,
+): Promise<T> {
+  const fullKey = scopedKey(key, token);
+  const hit = readCache(fullKey);
+  if (hit !== undefined) return hit as T;
+  const value = await fetcher();
+  writeCache(fullKey, value, ttlMs);
+  return value;
 }
 
 export async function loginRequest(
@@ -329,13 +440,15 @@ export async function elderRegisterRequest(
 }
 
 export async function getLandingMetrics(): Promise<LandingMetrics> {
-  const response = await fetch(`${getApiBaseUrl()}/public/landing`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-  });
+  return cachedGet("public.landing", 5 * 60_000, null, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/public/landing`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
 
-  return parseJsonOrThrow(response);
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function getDashboardOverview(
@@ -381,36 +494,41 @@ export async function createElder(
     body: JSON.stringify(payload),
   });
 
+  invalidateCache("elders", token);
   return parseJsonOrThrow(response);
 }
 
 export async function listMyElders(token: string): Promise<ElderListItem[]> {
-  const response = await fetch(`${getApiBaseUrl()}/elders`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  return cachedGet("elders.mine", 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/elders`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
 
-  return parseJsonOrThrow(response);
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function getElderDetail(
   token: string,
   elderId: string,
 ): Promise<ElderDetail> {
-  const response = await fetch(`${getApiBaseUrl()}/elders/${elderId}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  return cachedGet(`elders.detail.${elderId}`, 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/elders/${elderId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
 
-  return parseJsonOrThrow(response);
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function listUsersAdmin(
@@ -424,34 +542,39 @@ export async function listUsersAdmin(
   if (filters?.status) params.set("status", filters.status);
   if (filters?.search) params.set("search", filters.search);
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/users?${params.toString()}`,
-    {
+  const qs = params.toString();
+  return cachedGet(`users.admin.${qs}`, 30_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/users?${qs}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      },
+    );
+
+    return parseJsonOrThrow(response);
+  });
+}
+
+export async function getMyElderProfile(
+  token: string,
+): Promise<MyElderProfile> {
+  return cachedGet("elders.me", 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/elders/me`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       cache: "no-store",
-    },
-  );
+    });
 
-  return parseJsonOrThrow(response);
-}
-
-export async function getMyElderProfile(
-  token: string,
-): Promise<MyElderProfile> {
-  const response = await fetch(`${getApiBaseUrl()}/elders/me`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
+    return parseJsonOrThrow(response);
   });
-
-  return parseJsonOrThrow(response);
 }
 
 export async function getCurrentUserProfile(
@@ -473,16 +596,18 @@ export async function getSkillTestQuestions(
   token: string,
   role: "volunteer" | "supervisor",
 ): Promise<SkillTestGroupedResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/tests/${role}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  return cachedGet(`tests.questions.${role}`, 10 * 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/tests/${role}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
 
-  return parseJsonOrThrow(response);
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function submitSkillTest(
@@ -499,6 +624,8 @@ export async function submitSkillTest(
     body: JSON.stringify({ answers }),
   });
 
+  invalidateCache("tests", token);
+  invalidateCache("assessments.me", token);
   return parseJsonOrThrow(response);
 }
 
@@ -506,16 +633,18 @@ export async function getTestProgress(
   token: string,
   role: "volunteer" | "supervisor",
 ): Promise<TestProgressResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/tests/${role}/progress`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  return cachedGet(`tests.progress.${role}`, 30_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/tests/${role}/progress`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
 
-  return parseJsonOrThrow(response);
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function saveTestProgress(
@@ -532,6 +661,7 @@ export async function saveTestProgress(
     body: JSON.stringify(data),
   });
 
+  invalidateCache(`tests.progress`, token);
   return parseJsonOrThrow(response);
 }
 
@@ -590,36 +720,40 @@ export interface ProfileUpdateRequest {
 export async function listPendingVolunteers(
   token: string,
 ): Promise<PendingVolunteer[]> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/users/pending-approval?role=volunteer`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+  return cachedGet("users.pending.volunteer", 30_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/users/pending-approval?role=volunteer`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function getVolunteerTestDetail(
   token: string,
   userId: string,
 ): Promise<VolunteerTestDetail> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/users/${userId}/test-detail`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+  return cachedGet(`users.testdetail.${userId}`, 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/users/${userId}/test-detail`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function approveVolunteer(
@@ -636,6 +770,14 @@ export async function approveVolunteer(
       },
     },
   );
+
+  invalidateCache("users.pending", token);
+  invalidateCache("users.volunteers", token);
+  invalidateCache("users.admin", token);
+  invalidateCache(`users.testdetail.${userId}`, token);
+  invalidateCache(`users.detail.${userId}`, token);
+  invalidateCache(`users.basic.${userId}`, token);
+  invalidateCache(`assessments.user.${userId}`, token);
   return parseJsonOrThrow(response);
 }
 
@@ -680,18 +822,20 @@ export interface AssessmentResultsResponse {
 export async function getMyAssessmentResults(
   token: string,
 ): Promise<AssessmentResultsResponse> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/users/me/assessment-results`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+  return cachedGet("assessments.me", 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/users/me/assessment-results`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 // ── Supervisor Volunteer Management ─────────────────────────────────
@@ -712,69 +856,80 @@ export interface SupervisorVolunteersResponse {
 export async function listVolunteersWithElders(
   token: string,
 ): Promise<SupervisorVolunteersResponse> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/admin/supervisor/volunteers-with-elders`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
+  return cachedGet("users.volunteers.with-elders", 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/admin/supervisor/volunteers-with-elders`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function getVolunteerAssessmentResults(
   token: string,
   userId: string,
 ): Promise<AssessmentResultsResponse> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/admin/users/${userId}/assessment-results`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
+  return cachedGet(`assessments.user.${userId}`, 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/admin/users/${userId}/assessment-results`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function listAvailableElders(
   token: string,
 ): Promise<ElderListItem[]> {
-  const response = await fetch(`${getApiBaseUrl()}/elders/available`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet("elders.available", 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/elders/available`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 export async function listAllElders(
   token: string,
   withoutCase?: boolean,
 ): Promise<ElderListItem[]> {
-  const params = withoutCase ? "?without_case=true" : "";
-  const response = await fetch(`${getApiBaseUrl()}/elders/all${params}`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  const tag = withoutCase ? "without_case" : "all";
+  return cachedGet(`elders.${tag}`, 60_000, token, async () => {
+    const params = withoutCase ? "?without_case=true" : "";
+    const response = await fetch(`${getApiBaseUrl()}/elders/all${params}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 export async function listAllVolunteers(
   token: string,
 ): Promise<AdminUserListItem[]> {
-  const response = await fetch(`${getApiBaseUrl()}/users/volunteers/list`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet("users.volunteers.list", 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/users/volunteers/list`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 // ── Elder Assessment ────────────────────────────────────────────────
@@ -790,17 +945,19 @@ export async function getElderAssessmentResults(
   token: string,
   elderId: string,
 ): Promise<ElderAssessmentResultsResponse> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/elders/${elderId}/assessment-results`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
+  return cachedGet(`assessments.elder.${elderId}`, 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/elders/${elderId}/assessment-results`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 // ── Admin ──────────────────────────────────────────────────────────
@@ -808,18 +965,20 @@ export async function getElderAssessmentResults(
 export async function listPendingSupervisors(
   token: string,
 ): Promise<PendingVolunteer[]> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/users/pending-approval?role=supervisor`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+  return cachedGet("users.pending.supervisor", 30_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/users/pending-approval?role=supervisor`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function changeUserStatus(
@@ -835,6 +994,14 @@ export async function changeUserStatus(
     },
     body: JSON.stringify({ status: newStatus }),
   });
+
+  invalidateCache("users.pending", token);
+  invalidateCache("users.volunteers", token);
+  invalidateCache("users.admin", token);
+  invalidateCache(`users.detail.${userId}`, token);
+  invalidateCache(`users.basic.${userId}`, token);
+  invalidateCache(`users.testdetail.${userId}`, token);
+  invalidateCache(`assessments.user.${userId}`, token);
   return parseJsonOrThrow(response);
 }
 
@@ -848,6 +1015,14 @@ export async function deleteUser(
       Authorization: `Bearer ${token}`,
     },
   });
+
+  invalidateCache("users.pending", token);
+  invalidateCache("users.volunteers", token);
+  invalidateCache("users.admin", token);
+  invalidateCache(`users.detail.${userId}`, token);
+  invalidateCache(`users.basic.${userId}`, token);
+  invalidateCache(`users.testdetail.${userId}`, token);
+  invalidateCache(`assessments.user.${userId}`, token);
   return parseJsonOrThrow(response);
 }
 
@@ -875,17 +1050,19 @@ export async function listAdminTestQuestions(
   role?: "volunteer" | "supervisor",
 ): Promise<AdminTestQuestion[]> {
   const params = role ? `?role=${role}` : "";
-  const response = await fetch(
-    `${getApiBaseUrl()}/admin/test-questions${params}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
+  return cachedGet(`admin.test-questions.${role || "all"}`, 10 * 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/admin/test-questions${params}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function createTestQuestion(
@@ -906,6 +1083,8 @@ export async function createTestQuestion(
     },
     body: JSON.stringify(data),
   });
+  invalidateCache("admin.test-questions", token);
+  invalidateCache("tests.questions", token);
   return parseJsonOrThrow(response);
 }
 
@@ -930,6 +1109,8 @@ export async function updateTestQuestion(
       body: JSON.stringify(data),
     },
   );
+  invalidateCache("admin.test-questions", token);
+  invalidateCache("tests.questions", token);
   return parseJsonOrThrow(response);
 }
 
@@ -944,23 +1125,27 @@ export async function deleteTestQuestion(
       headers: { Authorization: `Bearer ${token}` },
     },
   );
+  invalidateCache("admin.test-questions", token);
+  invalidateCache("tests.questions", token);
   return parseJsonOrThrow(response);
 }
 
 export async function listAdminAssessmentQuestions(
   token: string,
 ): Promise<AdminAssessmentQuestion[]> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/admin/assessment-questions`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
+  return cachedGet("admin.assessment-questions", 10 * 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/admin/assessment-questions`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
       },
-      cache: "no-store",
-    },
-  );
-  return parseJsonOrThrow(response);
+    );
+    return parseJsonOrThrow(response);
+  });
 }
 
 export async function createAssessmentQuestion(
@@ -983,6 +1168,8 @@ export async function createAssessmentQuestion(
       body: JSON.stringify(data),
     },
   );
+  invalidateCache("admin.assessment-questions", token);
+  invalidateCache("elders.question", token);
   return parseJsonOrThrow(response);
 }
 
@@ -1007,6 +1194,8 @@ export async function updateAssessmentQuestion(
       body: JSON.stringify(data),
     },
   );
+  invalidateCache("admin.assessment-questions", token);
+  invalidateCache("elders.question", token);
   return parseJsonOrThrow(response);
 }
 
@@ -1021,6 +1210,8 @@ export async function deleteAssessmentQuestion(
       headers: { Authorization: `Bearer ${token}` },
     },
   );
+  invalidateCache("admin.assessment-questions", token);
+  invalidateCache("elders.question", token);
   return parseJsonOrThrow(response);
 }
 
@@ -1263,13 +1454,14 @@ export interface CaseUpdateRequest {
 // ── Admin/Supervisor Case Endpoints ──────────────────────────────────
 
 export async function listCases(token: string): Promise<ElderCaseOut[]> {
-  const response = await fetch(`${getApiBaseUrl()}/admin/cases`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet("cases.admin", 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/admin/cases`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  console.log("------- >listCases response:", response);
-  return parseJsonOrThrow(response);
 }
 
 export async function createCase(
@@ -1284,6 +1476,9 @@ export async function createCase(
     },
     body: JSON.stringify(data),
   });
+
+  invalidateCache("cases", token);
+  invalidateCache("elders", token);
   return parseJsonOrThrow(response);
 }
 
@@ -1291,12 +1486,14 @@ export async function getCaseDetail(
   token: string,
   caseId: string,
 ): Promise<ElderCaseDetail> {
-  const response = await fetch(`${getApiBaseUrl()}/admin/cases/${caseId}`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet(`cases.admin.${caseId}`, 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/admin/cases/${caseId}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 export async function updateCase(
@@ -1312,6 +1509,8 @@ export async function updateCase(
     },
     body: JSON.stringify(data),
   });
+
+  invalidateCache("cases", token);
   return parseJsonOrThrow(response);
 }
 
@@ -1323,34 +1522,42 @@ export async function deleteCase(
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
+
+  invalidateCache("cases", token);
   return parseJsonOrThrow(response);
 }
 
 // ── Volunteer Case Endpoints ─────────────────────────────────────────
 
 export async function listMyCases(token: string): Promise<ElderCaseOut[]> {
-  const response = await fetch(`${getApiBaseUrl()}/elders/cases`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet("cases.elders", 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/elders/cases`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 export async function getMyCaseDetail(
   token: string,
   caseId: string,
 ): Promise<ElderCaseDetail> {
-  const response = await fetch(`${getApiBaseUrl()}/elders/cases/${caseId}`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet(`cases.elders.${caseId}`, 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/elders/cases/${caseId}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 export function clearAuthSession() {
   if (typeof window === "undefined") return;
+  clearAllCaches();
+  localStorage.removeItem(PROFILE_SNAPSHOT_KEY);
   localStorage.removeItem("auth_token");
   localStorage.removeItem("auth_user");
   localStorage.removeItem("remember_me");
@@ -1406,6 +1613,194 @@ export async function deleteElderPhoto(
   return parseJsonOrThrow(response);
 }
 
+// ── Evaluation Config (dynamic scoring/interpretation) ───────────────
+
+export type QuestionnaireKey = "volunteer" | "supervisor" | "elder";
+
+export interface EvaluationThresholdOut {
+  id: string;
+  min_value: number | null;
+  max_value: number | null;
+  value_basis: "absolute" | "percentage";
+  level: string;
+  interpretation: string;
+  sort_order: number;
+}
+
+export interface EvaluationDimensionOut {
+  id: string;
+  questionnaire: QuestionnaireKey;
+  category_key: string;
+  scope: "category" | "dimension";
+  dimension_key: string | null;
+  label: string;
+  question_ids: number[];
+  formula: "sum" | "average" | "percentage";
+  sort_order: number;
+  active: boolean;
+  thresholds: EvaluationThresholdOut[];
+}
+
+export interface EvaluationConfigResponse {
+  questionnaire: QuestionnaireKey;
+  categories: EvaluationDimensionOut[];
+  dimensions: EvaluationDimensionOut[];
+}
+
+export async function getEvaluationConfig(
+  token: string,
+  questionnaire: QuestionnaireKey,
+): Promise<EvaluationConfigResponse> {
+  return cachedGet(`admin.eval-config.${questionnaire}`, 5 * 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/admin/evaluation-config?questionnaire=${questionnaire}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      },
+    );
+    return parseJsonOrThrow(response);
+  });
+}
+
+export async function updateEvaluationDimension(
+  token: string,
+  dimensionId: string,
+  data: {
+    label?: string;
+    question_ids?: number[];
+    formula?: "sum" | "average" | "percentage";
+    active?: boolean;
+    sort_order?: number;
+  },
+): Promise<EvaluationDimensionOut> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/admin/evaluation-dimensions/${dimensionId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    },
+  );
+  invalidateCache("admin.eval-config", token);
+  return parseJsonOrThrow(response);
+}
+
+export async function createEvaluationDimension(
+  token: string,
+  data: {
+    questionnaire: QuestionnaireKey;
+    category_key: string;
+    scope: "category" | "dimension";
+    dimension_key?: string | null;
+    label: string;
+    question_ids?: number[];
+    formula?: "sum" | "average" | "percentage";
+  },
+): Promise<EvaluationDimensionOut> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/admin/evaluation-dimensions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    },
+  );
+  invalidateCache("admin.eval-config", token);
+  return parseJsonOrThrow(response);
+}
+
+export async function deleteEvaluationDimension(
+  token: string,
+  dimensionId: string,
+): Promise<{ message: string }> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/admin/evaluation-dimensions/${dimensionId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  invalidateCache("admin.eval-config", token);
+  return parseJsonOrThrow(response);
+}
+
+export async function createEvaluationThreshold(
+  token: string,
+  dimensionId: string,
+  data: {
+    min_value?: number | null;
+    max_value?: number | null;
+    value_basis: "absolute" | "percentage";
+    level: string;
+    interpretation?: string;
+    sort_order?: number;
+  },
+): Promise<EvaluationThresholdOut> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/admin/evaluation-thresholds?evaluation_dimension_id=${dimensionId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    },
+  );
+  invalidateCache("admin.eval-config", token);
+  return parseJsonOrThrow(response);
+}
+
+export async function updateEvaluationThreshold(
+  token: string,
+  thresholdId: string,
+  data: {
+    min_value?: number | null;
+    max_value?: number | null;
+    value_basis: "absolute" | "percentage";
+    level: string;
+    interpretation?: string;
+    sort_order?: number;
+  },
+): Promise<EvaluationThresholdOut> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/admin/evaluation-thresholds/${thresholdId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    },
+  );
+  invalidateCache("admin.eval-config", token);
+  return parseJsonOrThrow(response);
+}
+
+export async function deleteEvaluationThreshold(
+  token: string,
+  thresholdId: string,
+): Promise<{ message: string }> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/admin/evaluation-thresholds/${thresholdId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  invalidateCache("admin.eval-config", token);
+  return parseJsonOrThrow(response);
+}
+
 // ── User Detail by ID ──────────────────────────────────────────────────
 
 export interface UserDetailResponse {
@@ -1433,14 +1828,16 @@ export async function getUserById(
   token: string,
   userId: string,
 ): Promise<UserDetailResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/users/${userId}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
+  return cachedGet(`users.detail.${userId}`, 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/users/${userId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
-  return parseJsonOrThrow(response);
 }
 
 export interface BasicUserInfo {
@@ -1454,10 +1851,82 @@ export async function getUserBasicInfo(
   token: string,
   userId: string,
 ): Promise<BasicUserInfo> {
-  const response = await fetch(`${getApiBaseUrl()}/users/${userId}/basic`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return cachedGet(`users.basic.${userId}`, 60_000, token, async () => {
+    const response = await fetch(`${getApiBaseUrl()}/users/${userId}/basic`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    return parseJsonOrThrow(response);
   });
+}
+
+// ── Elder Questionnaire (grouped questions + answers) ────────────────
+
+export interface ElderQuestionOption {
+  text: string;
+  points: number;
+}
+
+export interface ElderQuestion {
+  id: number;
+  question_text: string;
+  options: ElderQuestionOption[];
+  order: number;
+  category: string | null;
+}
+
+export interface ElderQuestionGroup {
+  key: string;
+  label: string;
+  questions: ElderQuestion[];
+}
+
+export interface ElderQuestionGroupsResponse {
+  categories: ElderQuestionGroup[];
+  total_questions: number;
+}
+
+export async function getElderQuestionnaireGroups(
+  token: string,
+): Promise<ElderQuestionGroupsResponse> {
+  return cachedGet("elders.question-groups", 10 * 60_000, token, async () => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/elders/questions/grouped`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      },
+    );
+    return parseJsonOrThrow(response);
+  });
+}
+
+export async function postElderAnswer(
+  token: string,
+  elderId: string,
+  questionId: number,
+  chosenOptionIndex: number,
+): Promise<{ message?: string }> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/elders/${elderId}/questionnaire/answer`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        question_id: questionId,
+        chosen_option_index: chosenOptionIndex,
+      }),
+    },
+  );
+
+  invalidateCache(`assessments.elder.${elderId}`, token);
+  invalidateCache(`elders.detail.${elderId}`, token);
+  invalidateCache("elders.me", token);
+  invalidateCache("cases", token);
   return parseJsonOrThrow(response);
 }

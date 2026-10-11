@@ -1,11 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  getCurrentUserProfile,
-  getStoredAuthToken,
-  type CurrentUserProfile,
-} from "@/lib/api";
+import { useMemo } from "react";
+import { useProfileContext } from "@/components/profile-provider";
 
 function roleToLabel(role?: string) {
   switch (role) {
@@ -21,49 +17,15 @@ function roleToLabel(role?: string) {
   }
 }
 
+/**
+ * Reads the shared current-user profile from ProfileProvider context.
+ *
+ * The provider (mounted once in the root layout) is responsible for fetching
+ * `GET /users/me`; every consumer of this hook shares that single result
+ * instead of firing its own request.
+ */
 export function useCurrentUserProfile() {
-  const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadProfile() {
-      const token = getStoredAuthToken();
-      if (!token) {
-        if (isMounted) {
-          setLoading(false);
-          setError("Sessao expirada.");
-        }
-        return;
-      }
-
-      try {
-        const data = await getCurrentUserProfile(token);
-        if (isMounted) {
-          setProfile(data);
-          setError("");
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(
-            err instanceof Error ? err.message : "Falha ao carregar perfil.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadProfile();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const { profile, loading, error } = useProfileContext();
 
   const displayName = useMemo(() => {
     if (!profile?.name) return "Utilizador PACTO";

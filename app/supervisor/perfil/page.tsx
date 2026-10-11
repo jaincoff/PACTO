@@ -17,9 +17,9 @@ import {
   Camera,
 } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
+import { useProfileContext } from "@/components/profile-provider";
 import {
   clearAuthSession,
-  getCurrentUserProfile,
   getMyAssessmentResults,
   getStoredAuthToken,
   updateMyProfile,
@@ -39,6 +39,11 @@ import {
 
 export default function SupervisorPerfilPage() {
   const router = useRouter();
+  const {
+    profile: sharedProfile,
+    error: sharedError,
+    reload: reloadProfile,
+  } = useProfileContext();
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
   const [assessmentResults, setAssessmentResults] =
     useState<AssessmentResultsResponse | null>(null);
@@ -55,19 +60,27 @@ export default function SupervisorPerfilPage() {
     email: "",
   });
 
+  // Reuse the single GET /users/me already fetched by ProfileProvider.
   useEffect(() => {
-    async function load() {
+    if (!sharedProfile) return;
+    setProfile(sharedProfile);
+    setFormData({ nomeCompleto: sharedProfile.name, email: sharedProfile.email });
+  }, [sharedProfile]);
+
+  useEffect(() => {
+    if (sharedError) setError(sharedError);
+  }, [sharedError]);
+
+  useEffect(() => {
+    async function loadResults() {
       const token = getStoredAuthToken();
-      if (!token) return;
-      setLoading(true);
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       try {
-        const [prof, results] = await Promise.all([
-          getCurrentUserProfile(token),
-          getMyAssessmentResults(token),
-        ]);
-        setProfile(prof);
+        const results = await getMyAssessmentResults(token);
         setAssessmentResults(results);
-        setFormData({ nomeCompleto: prof.name, email: prof.email });
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Falha ao carregar perfil.",
@@ -76,7 +89,7 @@ export default function SupervisorPerfilPage() {
         setLoading(false);
       }
     }
-    load();
+    loadResults();
   }, []);
 
   const handleSave = async () => {
@@ -88,6 +101,7 @@ export default function SupervisorPerfilPage() {
         name: formData.nomeCompleto,
         email: formData.email,
       });
+      reloadProfile();
       setSaveMsg("Perfil atualizado.");
       setTimeout(() => setSaveMsg(""), 3000);
     } catch (err) {
@@ -108,6 +122,7 @@ export default function SupervisorPerfilPage() {
     try {
       const result = await uploadProfilePhoto(token, file);
       setProfile((prev) => prev ? { ...prev, photo: result.photo } : prev);
+      reloadProfile();
     } catch {
       // ignore
     } finally {
@@ -123,6 +138,7 @@ export default function SupervisorPerfilPage() {
     try {
       await deleteProfilePhoto(token);
       setProfile((prev) => prev ? { ...prev, photo: null } : prev);
+      reloadProfile();
     } catch {
       // ignore
     } finally {

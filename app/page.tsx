@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useProfileContext } from "@/components/profile-provider";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -18,41 +19,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PactoLogo } from "@/components/pacto-logo";
 import {
   getLandingMetrics,
-  getCurrentUserProfile,
-  clearAuthSession,
-  getStoredAuthToken,
-  getStoredAuthUser,
   getDashboardRouteForRole,
   type LandingMetrics,
 } from "../lib/api";
 
 export default function LandingPage() {
   const router = useRouter();
-  const redirected = useRef(false);
+  const { profile: authProfile, loading: profileLoading } = useProfileContext();
   const [metrics, setMetrics] = useState<LandingMetrics>({
     active_volunteers: 0,
     active_supervisors: 0,
     elders_supported: 0,
   });
 
-  // Redirect authenticated users to their dashboard — verify token with API first
+  // Redirect authenticated users to their dashboard — the shared provider
+  // fetches /users/me once on load, so just react to its result.
   useEffect(() => {
-    if (redirected.current) return;
-    const token = getStoredAuthToken();
-    const user = getStoredAuthUser();
-    if (!token || !user?.role) return;
-
-    redirected.current = true;
-
-    getCurrentUserProfile(token)
-      .then((prof) => {
-        router.replace(getDashboardRouteForRole(prof.role));
-      })
-      .catch(() => {
-        clearAuthSession();
-        redirected.current = false;
-      });
-  }, []);
+    if (profileLoading || !authProfile?.role) return;
+    router.replace(getDashboardRouteForRole(authProfile.role));
+  }, [authProfile, profileLoading, router]);
 
   useEffect(() => {
     getLandingMetrics()

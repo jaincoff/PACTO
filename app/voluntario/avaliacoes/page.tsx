@@ -611,7 +611,7 @@ export default function AvaliacoesPage() {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold lg:text-2xl">
-                    {currentCatMeta.label || selectedCategory}
+                    {selectedCategory}
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     {currentCatMeta.description}

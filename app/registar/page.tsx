@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useProfileContext } from "@/components/profile-provider";
 import {
   Heart,
   Users,
@@ -26,10 +27,6 @@ import { Label } from "@/components/ui/label";
 import {
   elderRegisterRequest,
   registerUserRequest,
-  getCurrentUserProfile,
-  clearAuthSession,
-  getStoredAuthToken,
-  getStoredAuthUser,
   getDashboardRouteForRole,
 } from "../../lib/api";
 import { PactoLogo } from "@/components/pacto-logo";
@@ -44,31 +41,19 @@ const roles = [
 
 export default function RegistarPage() {
   const router = useRouter();
+  const { profile: authProfile, loading: profileLoading } = useProfileContext();
   const [selectedRole, setSelectedRole] = useState<Role>("voluntario");
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [birthYearError, setBirthYearError] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const redirectedReg = useRef(false);
 
-  // Redirect if already authenticated — verify token with API first
+  // Redirect if already authenticated — the shared profile provider fetches
+  // /users/me once on load, so just react to its result.
   useEffect(() => {
-    if (redirectedReg.current) return;
-    const token = getStoredAuthToken();
-    const user = getStoredAuthUser();
-    if (!token || !user?.role) return;
-
-    redirectedReg.current = true;
-
-    getCurrentUserProfile(token)
-      .then((prof) => {
-        router.replace(getDashboardRouteForRole(prof.role));
-      })
-      .catch(() => {
-        clearAuthSession();
-        redirectedReg.current = false;
-      });
-  }, []);
+    if (profileLoading || !authProfile?.role) return;
+    router.replace(getDashboardRouteForRole(authProfile.role));
+  }, [authProfile, profileLoading, router]);
 
   const currentYear = new Date().getFullYear();
 

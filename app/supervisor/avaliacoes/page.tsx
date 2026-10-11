@@ -256,7 +256,7 @@ export default function SupervisorAvaliacoesPage() {
                   {(() => { const Icon = currentCatMeta.icon; return <Icon className="h-5 w-5 text-primary" />; })()}
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold lg:text-2xl">{currentCatMeta.label || selectedCategory}</h1>
+                  <h1 className="text-xl font-bold lg:text-2xl">{selectedCategory}</h1>
                   <p className="text-sm text-muted-foreground">{currentCatMeta.description}</p>
                 </div>
               </div>

@@ -68,6 +68,12 @@ export function AdminMobileHeader() {
       href: "/admin/avaliacoes",
     },
     {
+      id: "avaliacoes-config",
+      label: "Config. Avaliações",
+      icon: Settings,
+      href: "/admin/avaliacoes-config",
+    },
+    {
       id: "exportacao",
       label: "Exportação de Dados",
       icon: Download,
